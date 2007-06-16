@@ -72,7 +72,8 @@ int relfreq(int freq, int halfnotes)
   if (!searchfreq(freq))
     return -1;
   int dir = (halfnotes > 0) ? +1 : -1;
-  for (int i = besti; i >= 0 && freqlist[i] && halfnotes != 0; halfnotes -= dir, i += dir)
+	int i;
+  for (i = besti; i >= 0 && freqlist[i] && halfnotes != 0; halfnotes -= dir, i += dir)
     ;
   if (halfnotes == 0)
     return freqlist[i];

@@ -172,13 +172,13 @@ int midicode;
       unsigned char* sysdata = get(syslen);
       if ((options_ & OPTION_NOSYSEVENTS) == 0)
       {
-	if (issysex(sysex_gmreset, sysdata, syslen))
+	if (issysex(sysex_gmreset, (char *)sysdata, syslen))
 	  gmreset();
-	else if (issysex(sysex_gsreset, sysdata, syslen))
+	else if (issysex(sysex_gsreset, (char *)sysdata, syslen))
 	  gsreset();
-	else if (issysex(sysex_gsexit, sysdata, syslen))
+	else if (issysex(sysex_gsexit, (char *)sysdata, syslen))
 	  gsexit();
-	else if (issysex(sysex_xgreset, sysdata, syslen))
+	else if (issysex(sysex_xgreset, (char *)sysdata, syslen))
 	  xgreset();
 	else
 	  sysex(syslen, sysdata);
@@ -1298,7 +1298,7 @@ void MidiWrite::prefixport(unsigned char port)
 void MidiWrite::text(int what, int len, unsigned char* txt)
 {
   if (len < 0)
-    len = strlen(txt);
+    len = strlen((char *)txt);
   meta(what, len, txt);
 }
 
