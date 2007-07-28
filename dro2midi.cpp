@@ -8,12 +8,19 @@
 // Instrument mappings are stored in *.reg ASCII files.  These files describe
 // the Adlib instruments and which MIDI patch they correspond to.
 //
+//  v1.0 / 2007-06-16 / malvineous@shikadi.net: Original release
+//  v1.1 / 2007-07-28 / malvineous@shikadi.net: Added .imf and .raw support, replaced
+//     Guenter's OPL -> MIDI frequency conversion algorithm (from a lookup table into
+//     a more accurate formula), consequently could simplify pitchbend code (now
+//     conversions with pitchbends enabled sound quite good!)
+//
 
 #include "midiio.hpp"
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
 #include <assert.h>
+#include <math.h>
 #include "freq.hpp"
 //#include <dir.h>
 
@@ -62,11 +69,17 @@ typedef struct
 INSTRUMENT reg[9]; // current registers of channel
 int lastprog[9];
 
+int iFormat = 0; // input format
+#define FORMAT_IMF  1
+#define FORMAT_DRO  2
+#define FORMAT_RAW  3
+int iSpeed = 0; // clock speed (in Hz)
+
 void usage()
 {
   fprintf(stderr,
 		"DRO2MIDI converts DOSBox .dro captures to General MIDI\n"
-		"Written by malvineous@shikadi.net in 2007 (v1.0)\n"
+		"Written by malvineous@shikadi.net in 2007 (v1.1)\n"
 		"Heavily based upon IMF2MIDI written by Guenter Nagler in 1996\n"
 		"\n"
 		"Usage: dro2midi [-p] [-r] input.dro output.mid\n"
@@ -75,6 +88,13 @@ void usage()
 		"\n"
 		"  -p   Use MIDI pitch bends to more accurately match the OPL note frequency\n"
 		"  -r   Also convert OPL rhythm-mode instruments\n"
+		"\n"
+		"Supported input formats:\n"
+		"\n"
+		" .raw  Rdos RAW OPL capture\n"
+		" .dro  DOSBox RAW OPL capture\n"
+		" .imf  id Software Music Format (type-0 and type-1 at 560Hz)\n"
+		" .wlf  id Software Music Format (type-0 and type-1 at 700Hz)\n"
 		"\n"
 		"Instrument definitions are read in from iX.reg, where X starts at 1 and\n"
 		"increases until file-not-found.\n"
@@ -310,6 +330,7 @@ long bestdiff = 0;
 	 printf("--- End iX.reg ---\n");
 	 
 	 // Save this unknown instrument as a known one, so the registers don't get printed again
+	 reg[channel].prog = instr[besti].prog;  // but keep the same patch that we've already assigned, so it doesn't drop back to a piano for the rest of the song
 	 instr[instrcnt++] = reg[channel];
 	}
   return besti;
@@ -351,11 +372,57 @@ int c;
   }
   long imflen = 0;
 
-	fseek(f, 16, SEEK_SET); // seek to "length in bytes" field
-  imflen = fgetc(f);
-  imflen += fgetc(f) << 8L;
-  imflen += fgetc(f) << 16L;
-  imflen += fgetc(f) << 24;
+	char cSig[9];
+	fseek(f, 0, SEEK_SET);
+  fgets(cSig, 9, f);
+	if (strncmp(cSig, "DBRAWOPL", 8) == 0) {
+		::iFormat = FORMAT_DRO;
+		printf("Input file is in DOSBox DRO format.\n");
+		::iSpeed = 1000;
+
+		fseek(f, 16, SEEK_SET); // seek to "length in bytes" field
+	  imflen = fgetc(f);
+	  imflen += fgetc(f) << 8L;
+	  imflen += fgetc(f) << 16L;
+	  imflen += fgetc(f) << 24;
+	} else if (strncmp(cSig, "RAWADATA", 8) == 0) {
+		::iFormat = FORMAT_RAW;
+		fprintf(stderr, "Input file is in Rdos RAW format.  This is not yet supported.\n");
+
+		// Read until EOF (0xFFFF is really the end but we'll check that during conversion)
+		fseek(f, 0, SEEK_END);
+	  imflen = ftell(f);
+
+		fseek(f, 8, SEEK_SET); // seek to "length in bytes" field
+		int iClockSpeed = fgetc(f) | (fgetc(f) << 8L);
+		if ((iClockSpeed == 0) || (iClockSpeed == 0xFFFF)) {
+			::iSpeed = 1000; // default to 1000Hz
+		} else {
+			::iSpeed = (int)(1193180.0 / iClockSpeed);
+		}
+	} else {
+		::iFormat = FORMAT_IMF;
+		if ((cSig[0] == 0) && (cSig[1] == 0)) {
+			printf("Input file appears to be in IMF type-0 format.\n");
+			fseek(f, 0, SEEK_END);
+		  imflen = ftell(f);
+			fseek(f, 4, SEEK_SET);
+		} else {
+			printf("Input file appears to be in IMF type-1 format.\n");
+		  imflen = cSig[0] | (cSig[1] << 8);
+			fseek(f, 6, SEEK_SET);
+		}
+		if (strcasecmp(&input[strlen(input)-3], "imf") == 0) {
+			printf("File extension is .imf - using 560Hz speed (rename to .wlf if this is too slow)\n");
+			::iSpeed = 560;
+		} else if (strcasecmp(&input[strlen(input)-3], "wlf") == 0) {
+			printf("File extension is .wlf - using 700Hz speed (rename to .imf if this is too fast)\n");
+			::iSpeed = 700;
+		} else {
+			printf("Unknown file extension - must be .imf or .wlf\n");
+			return 3;
+		}
+	}
 
   write = new MidiWrite(output);
   if (!write)
@@ -368,6 +435,8 @@ int c;
     perror(output);
     return 1;
   }
+	int iInitialSpeed = ::iSpeed;
+	resolution = iInitialSpeed / 2;
   write->head(/* version */ 0, /* track count updated later */0, resolution);
 
 
@@ -384,8 +453,8 @@ int c;
   for (c = 0; c <= 8; c++)
   {
     write->volume(c, 127);
-    write->program(c, c);
-    lastprog[c] = c;
+//    write->program(c, c);
+    lastprog[c] = -1;
 		reg[c].iOctave = 0;
   }
 
@@ -407,37 +476,99 @@ int c;
 		keyAlreadyOn[c] = false;
 		lastkey[c] = -1;
   }
-  while (imflen >= 4)
+	int iMinLen; // Minimum length for valid notes to still be present
+	switch (::iFormat) {
+		case FORMAT_IMF: iMinLen = 4; break;
+		case FORMAT_DRO: iMinLen = 2; break;
+		case FORMAT_RAW: iMinLen = 2; break;
+	}
+  while (imflen >= iMinLen)
   {
-//    imflen-=4;
-
-//    delay = fgetc(f); delay += (fgetc(f) << 8);
-    code = fgetc(f);
-		imflen--;
-		switch (code) {
-			case 0x00: // delay (byte)
-				delay += 1 + fgetc(f);
-				imflen--;
-				continue;
-			case 0x01: // delay (int)
-				delay += 1 + fgetc(f);
-				delay += fgetc(f) << 8L;
-				imflen -= 2;
-				continue;
-			case 0x02: // use first OPL chip
-			case 0x03: // use second OPL chip
-				fprintf(stderr, "Warning: This song uses multiple OPL chips - this isn't yet supported!\n");
-				continue;
-			case 0x04: // escape
-				code = fgetc(f);
-				imflen--;
+		switch (::iFormat) {
+			case FORMAT_IMF:
+				// Write the last iteration's delay (since the delay needs to come *after* the note)
+		    write->time(delay);
+				
+		    code = fgetc(f);
+		    param = fgetc(f);
+				delay = fgetc(f); delay += (fgetc(f) << 8);
+		    imflen-=4;
 				break;
-		}
-    param = fgetc(f);
-		imflen--;
-
-    write->time(delay);
-		delay = 0;
+			case FORMAT_DRO:
+		    code = fgetc(f);
+				imflen--;
+				switch (code) {
+					case 0x00: // delay (byte)
+						delay += 1 + fgetc(f);
+						imflen--;
+						continue;
+					case 0x01: // delay (int)
+						delay += 1 + fgetc(f);
+						delay += fgetc(f) << 8L;
+						imflen -= 2;
+						continue;
+					case 0x02: // use first OPL chip
+					case 0x03: // use second OPL chip
+						fprintf(stderr, "Warning: This song uses multiple OPL chips - this isn't yet supported!\n");
+						continue;
+					case 0x04: // escape
+						code = fgetc(f);
+						imflen--;
+						break;
+				}
+		    param = fgetc(f);
+				imflen--;
+				
+				// Write any delay (as this needs to come *before* the next note)
+		    write->time(delay);
+				delay = 0;
+				break;
+			case FORMAT_RAW:
+		    param = fgetc(f);
+		    code = fgetc(f);
+				imflen-=2;
+				switch (code) {
+					case 0x00: // delay (byte)
+						delay += param;//fgetc(f);
+						//imflen--;
+						continue;
+					case 0x02: // delay (int)
+						switch (param) {
+							case 0x00:
+								if (delay != 0) {
+									// See below - we need to write out any delay at the old clock speed before we change it
+							    write->time((delay * iInitialSpeed / ::iSpeed));
+									delay = 0;
+								}
+								::iSpeed = (int)(1193180.0 / (fgetc(f) | (fgetc(f) << 8L)));
+								//printf("Speed set to %d\n", iSpeed);
+								imflen -= 2;
+								break;
+							case 0x01:
+							case 0x02:
+								printf("Switching OPL ports is not yet implemented!\n");
+								break;
+						}
+						continue;
+					case 0xFF:
+						if (param == 0xFF) {
+							// End of song
+							imflen = 0;
+							continue;
+						}
+						break;
+				}
+				
+				// Write any delay (as this needs to come *before* the next note)
+				// Since our global clock speed is 1000Hz, we have to multiply this
+				// delay accordingly as the delay units are in the current clock speed.
+				// This calculation converts them into 1000Hz delay units regardless of
+				// the current clock speed.
+		    write->time((delay * iInitialSpeed / ::iSpeed));
+				//printf("delay is %d (ticks %d)\n", (delay * iInitialSpeed / ::iSpeed), delay);
+				delay = 0;
+				break;
+		} // switch (::iFormat)
 
     if (code >= 0xa0 && code <= 0xa8) // set freq bits 0-7
     {
@@ -453,11 +584,21 @@ int c;
 			reg[channel].iOctave = octave; // save in case rhythm instruments will be sounding on this channel
       int keyon = (param >> 5) & 1;
 
-      int key = freq2key(curfreq[channel], octave);
+      //int key = freq2key(curfreq[channel], octave);
+      double keyFrac = freq2key(curfreq[channel], octave);
+      int key = (int)round(keyFrac);
+			//printf("key: %lf\n", key);
       if (key > 0) {
 
 //    	  if ((keyon) && (keyAlreadyOn[channel])) { // last note is still held down, make this a pitchbend instead
     	  if ((::bUsePitchBends) && (keyon)) {
+					double dbDiff = fabs(keyFrac - key); // should be between -0.9999 and 0.9999
+//					printf("diff: %lf\n", dbDiff);
+					//if (dbDiff > 0.1) {
+						// This note is sufficiently off to warrant a pitchbend
+
+			    write->pitchbend(mapchannel[channel], (int)(pitchbend_center + 0x2000L * dbDiff));
+					/*
 					// See if the pitch needs to be adjusted slightly (may not be exactly on a MIDI note)
 					int nextfreq = nearestfreq(curfreq[channel]);
 					if (nextfreq == curfreq[channel])
@@ -476,7 +617,7 @@ int c;
 					    // pitch relative
 					    write->pitchbend(mapchannel[channel], (int)(pitchbend_center-0x2000L * (nextfreq-curfreq[channel]) / (nextfreq-freq)));
 					  }
-					}
+					}*/
 				}// else {
 
 				if (keyon) {
@@ -491,7 +632,7 @@ int c;
 					}
 					int i = findinstr(channel);
 					if (i >= 0 && instr[i].prog != lastprog[channel]) {
-						printf("channel %d: %s\n", channel, instr[i].name);
+						printf("channel %d set to: %s\n", channel, instr[i].name);
 						if (instr[i].prog >= 0 && !instr[i].isdrum && mapchannel[channel] == channel)
 							write->program(mapchannel[channel], lastprog[channel] = instr[i].prog);
 						else {
@@ -557,9 +698,19 @@ int c;
 						lastprog[channel] = PATCH_BASSDRUM;
 					}
 
-		      int key = freq2key(curfreq[channel], reg[channel].iOctave);
+		      double keyFrac = freq2key(curfreq[channel], octave);
+		      int key = (int)round(keyFrac);
+
+	    	  if (::bUsePitchBends) {
+						double dbDiff = fabs(keyFrac - key); // should be between -0.9999 and 0.9999
+						//printf("diff: %lf\n", dbDiff);
+				    write->pitchbend(channel, (int)(pitchbend_center + 0x2000L * dbDiff));
+					}
+
+//		      int key = freq2key(curfreq[channel], reg[channel].iOctave);
 					//write->noteon(gm_drumchannel, KEY_BASSDRUM, (0x3f - level) << 1);
 					write->noteon(channel, key, (0x3f - level) << 1);
+
 					rhythm[4] = 1;
 				} else if (rhythm[4]) {
 					// Bass drum off
@@ -590,7 +741,15 @@ int c;
 						lastprog[channel] = PATCH_TOMTOM;
 					}
 
-		      int key = freq2key(curfreq[channel], reg[channel].iOctave);
+		      double keyFrac = freq2key(curfreq[channel], octave);
+		      int key = (int)round(keyFrac);
+
+	    	  if (::bUsePitchBends) {
+						double dbDiff = fabs(keyFrac - key); // should be between -0.9999 and 0.9999
+						//printf("diff: %lf\n", dbDiff);
+				    write->pitchbend(channel, (int)(pitchbend_center + 0x2000L * dbDiff));
+					}
+//		      int key = freq2key(curfreq[channel], reg[channel].iOctave);
 					//write->noteon(gm_drumchannel, KEY_BASSDRUM, (0x3f - level) << 1);
 					write->noteon(channel, key, (0x3f - level) << 1);
 

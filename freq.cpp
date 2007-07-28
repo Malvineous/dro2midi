@@ -1,5 +1,22 @@
+#include <math.h>
+
 #include "freq.hpp"
 
+double freq2key(int freq, int octave)
+{
+/*  octave *= 12;
+  if (freq == 0)
+    return 0;
+  if (searchfreq(freq))
+    return octave + besti;
+  else
+    return 0;*/
+	int iFNum = freq;
+	int iBlock = octave;
+	double dbOriginalFreq = 49716.0 * (double)iFNum * pow(2, iBlock - 20);
+	return 69.0 + 12.0 * log2(dbOriginalFreq / 440.0);
+}
+/*
 int freqlist[] =
 {
   0x159, // C      24
@@ -45,17 +62,6 @@ int searchfreq(int freq)
   return besti >= 0;
 }
 
-int freq2key(int freq, int octave)
-{
-  octave *= 12;
-  if (freq == 0)
-    return 0;
-  if (searchfreq(freq))
-    return octave + besti;
-  else
-    return 0;
-}
-
 int nearestfreq(int freq)
 {
   if (freq == 0)
@@ -87,3 +93,4 @@ int key2freq(int key, int &freq, int &octave)
 
   return 1;
 }
+*/
