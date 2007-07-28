@@ -33,7 +33,7 @@
 #endif
 
 //#define PITCHBEND
-int pitchbend_center = 0;
+int pitchbend_center = 0x1000L;
 
 bool bRhythm = false; // convert rhythm mode instruments (-r)
 bool bUsePitchBends = false; // use pitch bends to better match MIDI note frequency with the OPL frequency (-p)
@@ -79,7 +79,7 @@ void usage()
 {
   fprintf(stderr,
 		"DRO2MIDI converts DOSBox .dro captures to General MIDI\n"
-		"Written by malvineous@shikadi.net in 2007 (v1.1)\n"
+		"Written by malvineous@shikadi.net in 2007 (v1.2)\n"
 		"Heavily based upon IMF2MIDI written by Guenter Nagler in 1996\n"
 		"\n"
 		"Usage: dro2midi [-p] [-r] input.dro output.mid\n"
@@ -370,7 +370,7 @@ int c;
     perror(input);
     return 1;
   }
-  long imflen = 0;
+  unsigned long imflen = 0;
 
 	char cSig[9];
 	fseek(f, 0, SEEK_SET);
@@ -394,7 +394,7 @@ int c;
 	  imflen = ftell(f);
 
 		fseek(f, 8, SEEK_SET); // seek to "length in bytes" field
-		int iClockSpeed = fgetc(f) | (fgetc(f) << 8L);
+		int iClockSpeed = fgetc(f) + (fgetc(f) << 8L);
 		if ((iClockSpeed == 0) || (iClockSpeed == 0xFFFF)) {
 			::iSpeed = 1000; // default to 1000Hz
 		} else {
@@ -406,11 +406,11 @@ int c;
 			printf("Input file appears to be in IMF type-0 format.\n");
 			fseek(f, 0, SEEK_END);
 		  imflen = ftell(f);
-			fseek(f, 4, SEEK_SET);
+			fseek(f, 0, SEEK_SET);
 		} else {
 			printf("Input file appears to be in IMF type-1 format.\n");
-		  imflen = cSig[0] | (cSig[1] << 8);
-			fseek(f, 6, SEEK_SET);
+		  imflen = cSig[0] + (cSig[1] << 8);
+			fseek(f, 2, SEEK_SET);
 		}
 		if (strcasecmp(&input[strlen(input)-3], "imf") == 0) {
 			printf("File extension is .imf - using 560Hz speed (rename to .wlf if this is too slow)\n");
@@ -466,6 +466,8 @@ int c;
   int channel;
   int code, param;
 	
+	int pitchbent[9];
+	
 	int rhythm[5]; // are these rhythm instruments currently playing?
   for (c = 0; c < 5; c++) rhythm[c] = 0;
 
@@ -475,6 +477,7 @@ int c;
     mapchannel[c] = c;
 		keyAlreadyOn[c] = false;
 		lastkey[c] = -1;
+		pitchbent[c] = pitchbend_center;
   }
 	int iMinLen; // Minimum length for valid notes to still be present
 	switch (::iFormat) {
@@ -482,7 +485,9 @@ int c;
 		case FORMAT_DRO: iMinLen = 2; break;
 		case FORMAT_RAW: iMinLen = 2; break;
 	}
-  while (imflen >= iMinLen)
+
+	unsigned long iSize = imflen; // sometimes the counter wraps around, need this to stop it from happening
+  while ((imflen >= iMinLen) && (imflen <= iSize))
   {
 		switch (::iFormat) {
 			case FORMAT_IMF:
@@ -588,48 +593,41 @@ int c;
       double keyFrac = freq2key(curfreq[channel], octave);
       int key = (int)round(keyFrac);
 			//printf("key: %lf\n", key);
-      if (key > 0) {
+      if ((key > 0) && (keyon)) {
 
-//    	  if ((keyon) && (keyAlreadyOn[channel])) { // last note is still held down, make this a pitchbend instead
-    	  if ((::bUsePitchBends) && (keyon)) {
-					double dbDiff = fabs(keyFrac - key); // should be between -0.9999 and 0.9999
-//					printf("diff: %lf\n", dbDiff);
-					//if (dbDiff > 0.1) {
-						// This note is sufficiently off to warrant a pitchbend
+				if (keyAlreadyOn[channel]) {
+					// There's already a note playing on this channel, just worry about the pitch of that
 
-			    write->pitchbend(mapchannel[channel], (int)(pitchbend_center + 0x2000L * dbDiff));
-					/*
-					// See if the pitch needs to be adjusted slightly (may not be exactly on a MIDI note)
-					int nextfreq = nearestfreq(curfreq[channel]);
-					if (nextfreq == curfreq[channel])
-					  write->pitchbend(mapchannel[channel], pitchbend_center); // normal position
-					else if (nextfreq > curfreq[channel])  // pitch up
-					{
-					  int freq = relfreq(nextfreq, +2); // two halfnotes above
-					  if (freq >= 0)
-					  {
-					    // pitch relative
-					    write->pitchbend(mapchannel[channel], (int)(pitchbend_center + 0x2000L * (curfreq[channel]-nextfreq) / (freq-nextfreq)));
-					  }
-					} else { // pitch down
-					  int freq = relfreq(nextfreq, -2); // two halfnotes down
-					  if (freq >= 0) {
-					    // pitch relative
-					    write->pitchbend(mapchannel[channel], (int)(pitchbend_center-0x2000L * (nextfreq-curfreq[channel]) / (nextfreq-freq)));
-					  }
-					}*/
-				}// else {
-
-				if (keyon) {
-					if (keyAlreadyOn[channel]) {
-						// old note is still on on this channel, switch it off
-						/*if (::bUsePitchBends) {
-						  write->pitchbend(mapchannel[channel], pitchbend_center); // normal position
-						}*/
+	    	  if (::bUsePitchBends) {
+						double dbDiff = fabs(keyFrac - key); // should be between -0.9999 and 0.9999
+						if ((keyAlreadyOn[channel]) && (lastkey[channel] != key)) {
+							// Frequency has changed while note is playing
+						
+							// Start a pitch slide from the old note...
+							write->portamentotime(mapchannel[channel], lastkey[channel]);
+							printf("event: portamento to note\n");
+							// ...and slide to the next note played
+						} else {
+							// It's the same note, but the pitch is off just slightly
+							int iNewBend = (int)(pitchbend_center + 0x1000L * dbDiff);
+					    if (iNewBend != pitchbent[channel]) {
+								write->pitchbend(mapchannel[channel], pitchbent[channel]); // pitchbends are between 0x0000L and 0x2000L
+								pitchbent[channel] = iNewBend;
+							}
+						}
+					} else {
+						// We're not using pitchbends, so just switch off the note
 						write->noteoff(mapchannel[channel], lastkey[channel]);
-//						printf("keyoff %d because of keyon\n", key);
-						// keyAlreadyOn[channel] = false;  <-- no need, will just be set back to true below
+						lastkey[channel] = 0;
+						keyAlreadyOn[channel] = false;
 					}
+				}
+
+				//} else {
+				if ((!keyAlreadyOn[channel]) || (::bUsePitchBends)) {  // If *now* there's no note playing...
+					// See if we need to update anything
+
+					// See if the instrument needs to change
 					int i = findinstr(channel);
 					if (i >= 0 && instr[i].prog != lastprog[channel]) {
 						printf("channel %d set to: %s\n", channel, instr[i].name);
@@ -640,26 +638,37 @@ int c;
 							lastprog[channel] = instr[i].prog;
 						}
 					}
+					
+					// Play the note
+	    	  if ((::bUsePitchBends) && (!keyAlreadyOn[channel])) {
+						double dbDiff = fabs(keyFrac - key); // should be between -0.9999 and 0.9999
 
+						int iNewBend = (int)(pitchbend_center + 0x1000L * dbDiff);
+				    if (iNewBend != pitchbent[channel]) {
+							write->pitchbend(mapchannel[channel], pitchbent[channel]); // pitchbends are between 0x0000L and 0x2000L
+							pitchbent[channel] = iNewBend;
+						}
+					}
 					int level = reg[channel].reg40[0] & 0x3f;
 					if (level > (reg[channel].reg40[1] & 0x3f))
 					level = reg[channel].reg40[1] & 0x3f;
 					write->noteon(mapchannel[channel], key, (0x3f - level) << 1);
+					
+					if ((::bUsePitchBends) && (keyAlreadyOn[channel])) {
+						// There was a note already playing, so we probably portamento'd to this note.
+						// We still need to switch off the old note.
+						write->noteoff(mapchannel[channel], lastkey[channel]);
+					}
 					lastkey[channel] = key;
 					keyAlreadyOn[channel] = true;
-//					printf("keyon %d\n", key);
-				}	else {
-					/*if (::bUsePitchBends) {
-					  write->pitchbend(mapchannel[channel], pitchbend_center); // normal position
-					}*/
-					//write->noteoff(mapchannel[channel], key);
-					write->noteoff(mapchannel[channel], lastkey[channel]);
-					lastkey[channel] = 0;
-					keyAlreadyOn[channel] = false;
-//					printf("keyoff %d\n", key);
+					
 				}
 
-      }
+      } else {
+				write->noteoff(mapchannel[channel], lastkey[channel]);
+				lastkey[channel] = 0;
+				keyAlreadyOn[channel] = false;
+			}
     }
 		else if ((code == 0xBD) && (::bRhythm))
 		{
