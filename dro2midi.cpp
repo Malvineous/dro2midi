@@ -24,13 +24,8 @@
 #include "freq.hpp"
 //#include <dir.h>
 
-#ifdef __MSDOS__
 #define WRITE_BINARY  "wb"
 #define READ_TEXT     "r"
-#else
-#define WRITE_BINARY  "w"
-#define READ_TEXT     "r"
-#endif
 
 //#define PITCHBEND
 int pitchbend_center = 0x1000L;
@@ -75,12 +70,22 @@ int iFormat = 0; // input format
 #define FORMAT_RAW  3
 int iSpeed = 0; // clock speed (in Hz)
 
-void usage()
+void version(int exitcode)
+{
+  fprintf(stderr,
+		"DRO2MIDI 1.2\n"
+		"Written by malvineous@shikadi.net in 2007 (v1.2)\n"
+		"Heavily based upon IMF2MIDI written by Guenter Nagler in 1996\n"
+		"\n"
+		"Copyright (C) 2007 Malvineous Shikadi.\n"
+	);
+  exit(exitcode);
+}
+
+void usage(int exitcode)
 {
   fprintf(stderr,
 		"DRO2MIDI converts DOSBox .dro captures to General MIDI\n"
-		"Written by malvineous@shikadi.net in 2007 (v1.2)\n"
-		"Heavily based upon IMF2MIDI written by Guenter Nagler in 1996\n"
 		"\n"
 		"Usage: dro2midi [-p] [-r] input.dro output.mid\n"
 		"\n"
@@ -99,7 +104,7 @@ void usage()
 		"Instrument definitions are read in from iX.reg, where X starts at 1 and\n"
 		"increases until file-not-found.\n"
 	);
-  exit(1);
+  exit(exitcode);
 }
 
 int getchannel(int i)
@@ -347,14 +352,16 @@ int c;
 			::bRhythm = true;
 		} else if (strncasecmp(*argv, "-p", 2) == 0) {
 			::bUsePitchBends = true;
+		} else if (strncasecmp(*argv, "--version", 9) == 0) {
+		  version(0);
 		} else {
 			fprintf(stderr, "invalid option %s\n", *argv);
-	    usage();
+	    usage(1);
 		}
     argc--; argv++;
   }
   if (argc < 2)
-    usage();
+    usage(1);
 
   input = argv[0];
   output = argv[1];
@@ -423,6 +430,7 @@ int c;
 			return 3;
 		}
 	}
+	fflush(stdout);
 
   write = new MidiWrite(output);
   if (!write)

@@ -8,13 +8,8 @@
 #endif
 
 // opening modes of a midi file
-#ifdef __MSDOS__
 #define WRITE_BINARY  "wb"
 #define READ_BINARY   "rb"
-#else
-#define WRITE_BINARY  "w"
-#define READ_BINARY   "r"
-#endif
 
 const unsigned long MThd = 0x4D546864ul;
 const unsigned long MTrk = 0x4D54726Bul;
