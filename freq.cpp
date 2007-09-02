@@ -13,7 +13,7 @@ double freq2key(int freq, int octave)
     return 0;*/
 	int iFNum = freq;
 	int iBlock = octave;
-	double dbOriginalFreq = 49716.0 * (double)iFNum * pow(2, iBlock - 20);
+	double dbOriginalFreq = 49716.0 * (double)iFNum * pow(2, (double)(iBlock - 20));
 	return 69.0 + 12.0 * log2(dbOriginalFreq / 440.0);
 }
 /*

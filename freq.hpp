@@ -1,3 +1,13 @@
+#include <math.h>
+
+#ifdef _MSC_VER
+// Keep MS VC++ happy
+inline double log2(double a)
+{
+   return log(a) / log(2.0);
+}
+#endif
+
 double freq2key(int freq, int octave);
 /*
 

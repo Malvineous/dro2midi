@@ -9,11 +9,51 @@
 // the Adlib instruments and which MIDI patch they correspond to.
 //
 //  v1.0 / 2007-06-16 / malvineous@shikadi.net: Original release
-//  v1.1 / 2007-07-28 / malvineous@shikadi.net: Added .imf and .raw support, replaced
-//     Guenter's OPL -> MIDI frequency conversion algorithm (from a lookup table into
-//     a more accurate formula), consequently could simplify pitchbend code (now
-//     conversions with pitchbends enabled sound quite good!)
 //
+//  v1.1 / 2007-07-28 / malvineous@shikadi.net: More file formats
+//     - Added .imf and .raw support
+//     - Replaced Guenter's OPL -> MIDI frequency conversion algorithm (from a
+//       lookup table into a much more accurate formula), consequently was able
+//       to simplify pitchbend code (now conversions with pitchbends enabled
+//       sound quite good!)
+//
+//  v1.2 / 2007-07-28 / malvineous@shikadi.net: Bugfix release
+//     - Fixed some file length calculations causing some files to be converted
+//       without any notes
+//     - Added portamento-to-note for large (>2 semitone) pitchbends, but it
+//       doesn't seem to work when using Timidity.
+//
+//  v1.3 / 2007-09-02 / malvineous@shikadi.net: New features
+//     - Fixed "tom tom" incorrectly called "bass drum" in output messages.
+//     - Fixed multi-note pitchbends by removing portamento-to-note and
+//       adjusting standard pitchbend range instead, thanks to a suggestion
+//       by Xky (xkyrauh2001@hotmail.com)
+//     - Implemented a better method for reading Adlib register -> MIDI patch
+//       mapping information (all stored in inst.txt now instead of having a
+//       seperate file for each instrument.)  Also improved method for mapping
+//       instruments to percussion on MIDI channel 10.
+//     - Fixed OPL rhythm instrument conversion issue (a MIDI noteon was being
+//       generated too often - if the OPL instrument is on and we receive
+//       another keyon, it *shouldn't* generate a fresh MIDI keyon.)
+//     - Fixed IMF type-1 conversion issue where unsigned numbers were being
+//       read as signed, and the conversion was cutting off half way through.
+//
+// TODO: Figure out why the Stunts .raw captures don't convert at all
+// (see testcases/stunts.raw)
+
+#define VERSION "1.3"
+#define MAPPING_FILE "inst.txt"
+
+#define PATCH_NAME_FILE "patch.txt"
+#define PERC_NAME_FILE "drum.txt"
+#define NUM_MIDI_PATCHES  128  // 128 MIDI instruments
+#define NUM_MIDI_PERC     128  // 46 MIDI percussive notes (channel 10), but 128 possible notes
+#define INSTR_NAMELEN      32  // Maximum length of an instrument name
+
+//#define PITCHBEND_RANGE 12.0   // 12 == pitchbends can go up to a full octave
+#define PITCHBEND_RANGE 24.0   // 24 == pitchbends can go up two full octaves
+#define PITCHBEND_ONESEMITONE  (8192.0 / PITCHBEND_RANGE)
+const double pitchbend_center = 8192.0;
 
 #include "midiio.hpp"
 #include <stdlib.h>
@@ -22,16 +62,44 @@
 #include <assert.h>
 #include <math.h>
 #include "freq.hpp"
+#include <stdio.h>
 //#include <dir.h>
 
 #define WRITE_BINARY  "wb"
 #define READ_TEXT     "r"
 
-//#define PITCHBEND
-int pitchbend_center = 0x1000L;
+#ifdef _MSC_VER
+// Keep MS VC++ happy
+#define strncasecmp _strnicmp
+#define strcasecmp _stricmp
+#define snprintf _snprintf
+#define log2(x) logbase(x, 2)
+inline double round( double d )
+{
+return floor( d + 0.5 );
+}
+#endif
 
-bool bRhythm = false; // convert rhythm mode instruments (-r)
-bool bUsePitchBends = false; // use pitch bends to better match MIDI note frequency with the OPL frequency (-p)
+bool bRhythm = true; // convert rhythm mode instruments (-r)
+bool bUsePitchBends = true; // use pitch bends to better match MIDI note frequency with the OPL frequency (-p)
+bool bApproximatePitchbends = false; // if pitchbends are disabled, should we approximate them by playing the nearest note when the pitch changes?
+bool bPerfectMatchesOnly = false;  // if true, only match perfect instruments
+
+
+//#define KEY_BASSDRUM  36 // MIDI bass drum
+#define KEY_SNAREDRUM 38 // MIDI snare drum
+//#define KEY_TOMTOM    41 // MIDI tom 1
+#define KEY_TOPCYMBAL 57 // MIDI crash cymbal
+#define KEY_HIHAT     42 // MIDI closed hihat
+
+#define CHAN_BASSDRUM  6 // Bass drum sits on OPL channel 7
+#define CHAN_TOMTOM    8 // Tom tom sits on OPL channel 9 (modulator only)
+			
+#define PATCH_BASSDRUM 116 // MIDI Taiko drum
+#define PATCH_TOMTOM   118//117 // MIDI melodic drum
+
+char cPatchName[NUM_MIDI_PATCHES][INSTR_NAMELEN];
+char cPercName[NUM_MIDI_PERC][INSTR_NAMELEN];
 
 char* input = 0;
 char* output = 0;
@@ -54,9 +122,13 @@ typedef struct
   unsigned char regC0;
   unsigned char regE0[2];
 
-  int prog;
+  int prog;  // MIDI patch (or -1 if a drum)
   int isdrum;
-  char name[8+1+3+1];
+	int note; // note to play if drum
+//  char name[8+1+3+1];
+	char name[128];
+	
+	int redirect; // if >= 0, use ::instr[redirect] instead of this one
 	
 	int iOctave; // need to store octave for rhythm mode instruments
 } INSTRUMENT;
@@ -69,42 +141,43 @@ int iFormat = 0; // input format
 #define FORMAT_DRO  2
 #define FORMAT_RAW  3
 int iSpeed = 0; // clock speed (in Hz)
+int iInitialSpeed = 0; // first iSpeed value written to MIDI header
 
-void version(int exitcode)
+void version()
 {
-  fprintf(stderr,
-		"DRO2MIDI 1.2\n"
-		"Written by malvineous@shikadi.net in 2007 (v1.2)\n"
+  printf("DRO2MIDI v" VERSION " - Convert raw Adlib captures to General MIDI\n"
+		"Written by malvineous@shikadi.net in 2007\n"
 		"Heavily based upon IMF2MIDI written by Guenter Nagler in 1996\n"
+		"http://www.shikadi.net/utils/\n"
 		"\n"
-		"Copyright (C) 2007 Malvineous Shikadi.\n"
 	);
-  exit(exitcode);
+	return;
 }
 
-void usage(int exitcode)
+void usage()
 {
+	version();
   fprintf(stderr,
-		"DRO2MIDI converts DOSBox .dro captures to General MIDI\n"
-		"\n"
-		"Usage: dro2midi [-p] [-r] input.dro output.mid\n"
+		"Usage: dro2midi [-p [-a]] [-r] input.dro output.mid\n"
 		"\n"
 		"Where:\n"
-		"\n"
-		"  -p   Use MIDI pitch bends to more accurately match the OPL note frequency\n"
-		"  -r   Also convert OPL rhythm-mode instruments\n"
+		"  -p   Disable use of MIDI pitch bends\n"
+		"  -a   If pitchbends are disabled, approximate by playing the nearest note\n"
+		"  -r   Don't convert OPL rhythm-mode instruments\n"
+		"  -i   Only use instruments that match perfectly (default is 'close enough is\n"
+		"       good enough.') Useful when guessing new patches. Instruments that can't\n"
+		"       be matched use the first entry in " MAPPING_FILE " (piano by default)\n"
 		"\n"
 		"Supported input formats:\n"
-		"\n"
 		" .raw  Rdos RAW OPL capture\n"
 		" .dro  DOSBox RAW OPL capture\n"
 		" .imf  id Software Music Format (type-0 and type-1 at 560Hz)\n"
 		" .wlf  id Software Music Format (type-0 and type-1 at 700Hz)\n"
 		"\n"
-		"Instrument definitions are read in from iX.reg, where X starts at 1 and\n"
-		"increases until file-not-found.\n"
+		"Instrument definitions are read in from " MAPPING_FILE ".  Instrument names\n"
+		"are read in from " PATCH_NAME_FILE " and " PERC_NAME_FILE ".\n"
 	);
-  exit(exitcode);
+  exit(1);
 }
 
 int getchannel(int i)
@@ -171,21 +244,112 @@ int getop(int i)
 }
 
 
-int loadinstr(char* filename, INSTRUMENT& in)
-{
-FILE* f = fopen(filename, "r");
-char line[128];
-  if (!f)
-    return 0;
-  memset(&in, 0, sizeof(in));
-  strcpy(in.name, filename);
-  if (strncasecmp(filename, "DRUM", 4) == 0)
-    in.isdrum = 1;
-  while (fgets(line, sizeof(line)-1, f))
-  {
-    int code, param1, param2;
+#define MAXINSTR  1000
+int instrcnt = 0;
+INSTRUMENT instr[MAXINSTR];
 
-    if (sscanf(line, "%02X: %02X %02X", &code, &param1, &param2) == 3)
+
+bool loadInstruments(void)//char* filename, INSTRUMENT& in)
+{
+	for (int i = 0; i < NUM_MIDI_PATCHES; i++) sprintf(cPatchName[i], "Patch #%d", i+1);
+	for (int i = 0; i < NUM_MIDI_PERC; i++) sprintf(cPercName[i], "Note #%d", i);
+
+	char line[256];
+
+	FILE* p = fopen(PATCH_NAME_FILE, "r");
+  if (!p) {
+		fprintf(stderr, "Warning: Unable to open file listing patch names (" PATCH_NAME_FILE ")\nInstrument names will not be available.\n");
+	} else {
+		while (fgets(line, sizeof(line)-1, p)) {
+			int iValue, iLen;
+			char *p = strpbrk(line, "\n\r");
+			if (p) *p = '\0'; // terminate the string at the newline
+			if (sscanf(line, "%d=%n", &iValue, &iLen) == 1) {
+				assert(iValue <= NUM_MIDI_PATCHES);
+				snprintf(cPatchName[iValue-1], INSTR_NAMELEN, "%s [%d]", &line[iLen], iValue);
+			} else if ((line[0] != '#') && (line[0] != '\n')) {
+				fprintf(stderr, "Invalid line in " PATCH_NAME_FILE ": %s\n", line);
+			}
+		}
+		fclose(p);
+	}
+
+	p = fopen(PERC_NAME_FILE, "r");
+  if (!p) {
+		fprintf(stderr, "Warning: Unable to open file listing percussion note names (" PERC_NAME_FILE ")\nPercussion names will not be available.\n");
+	} else {
+		while (fgets(line, sizeof(line)-1, p)) {
+			int iValue, iLen;
+			char *p = strpbrk(line, "\n\r");
+			if (p) *p = '\0'; // terminate the string at the newline
+			if (sscanf(line, "%d=%n", &iValue, &iLen) == 1) {
+				assert(iValue <= NUM_MIDI_PERC);
+				snprintf(cPercName[iValue], INSTR_NAMELEN, "%s [%d]", &line[iLen], iValue);
+			} else if ((line[0] != '#') && (line[0] != '\n')) {
+				fprintf(stderr, "Invalid line in " PERC_NAME_FILE ": %s\n", line);
+			}
+		}
+		fclose(p);
+	}
+	
+	FILE* f = fopen(MAPPING_FILE, "r");
+  if (!f) {
+		fprintf(stderr, "Warning: Unable to open instrument mapping file " MAPPING_FILE ", defaulting to a Grand Piano\nfor all instruments.\n");
+		return true;
+	}
+	INSTRUMENT in;
+  memset(&in, 0, sizeof(in));
+	in.redirect = -1; // none of these should redirect (but later automatic instruments will redirect to these ones)
+  //strcpy(in.name, filename);
+//  if (strncasecmp(filename, "DRUM", 4) == 0)
+//    in.isdrum = 1;
+	// Loop until we run out of lines in the data file or we hit the maximum number of instruments
+	char value[256];
+	for (::instrcnt = 0; fgets(line, sizeof(line)-1, f) && (instrcnt < MAXINSTR);) {
+//  while (fgets(line, sizeof(line)-1, f))
+//  {
+//    int code, param1, param2;
+		if (sscanf(line, "%02X-%02X/%02X-%02X/%02X-%02X/%02X-%02X/%02X/%02X-%02X: %s\n", &in.reg20[0], &in.reg20[1],
+		 	&in.reg40[0], &in.reg40[1],
+			&in.reg60[0], &in.reg60[1],
+			&in.reg80[0], &in.reg80[1],
+			&in.regC0,
+			&in.regE0[0], &in.regE0[1], &value) == 12)
+		{
+			int iValue;
+			if (sscanf(value, "patch=%d", &iValue) == 1) {
+				// MIDI patch
+				in.isdrum = 0;
+				in.prog = iValue - 1;
+				if ((in.prog < 0) || (in.prog > 127)) {
+					fprintf(stderr, "ERROR: Instrument #%d was set to patch=%d, but this value must be between 1 and 128 inclusive.\n", instrcnt, in.prog+1);
+					return false;
+				}
+				sprintf(in.name, "Instrument #%d: %s", instrcnt, cPatchName[in.prog]);
+			} else if (sscanf(value, "drum=%d", &iValue) == 1) {
+				// MIDI drum
+				in.isdrum = 1;
+				in.prog = -1;
+				in.note = iValue;
+				if ((in.note < 0) || (in.note > 127)) {
+					fprintf(stderr, "ERROR: Instrument #%d (perc) was set to drum=%d, but this value must be between 1 and 128 inclusive.\n", instrcnt, in.note);
+					return false;
+				}
+				sprintf(in.name, "Instrument #%d (perc): %s", instrcnt, cPercName[in.note]);
+			} else {
+				fprintf(stderr, "Unknown option %s\n", value);
+				return false;
+			}
+
+			// Add instrument
+			::instr[instrcnt++] = in;
+
+		} else if ((line[0] != '#') && (line[0] != '\r') && (line[0] != '\n')) {
+			fprintf(stderr, "Unable to parse this line:\n\n%s\n", line);
+			return false;
+		} // else the line starts with a # so it's a comment, ignore it.
+
+/*    if (sscanf(line, "%02X: %02X %02X", &code, &param1, &param2) == 3)
     {
       if (code >= 0x20 && code <= 0x35)
       {
@@ -228,16 +392,13 @@ char line[128];
       in.isdrum = 0;
     }
     else
-      fprintf(stderr, "invalid line: %s\n", line);
+      fprintf(stderr, "invalid line: %s\n", line);*/
   }
   fclose(f);
-  return 1;
+  return true;
 }
 
-#define MAXINSTR  1000
-int instrcnt = 0;
-INSTRUMENT instr[MAXINSTR];
-
+/*
 void loadinstruments()
 {
 	// IMF2MIDI originally read in any file ending in .reg, but I can't be
@@ -268,7 +429,7 @@ void loadinstruments()
 			break;
 		}
 	}
-/*
+/=*
 	int done;
 struct ffblk ff;
 
@@ -279,8 +440,8 @@ struct ffblk ff;
       instrcnt++;
     done = findnext(&ff);
   }
-*/
-}
+*=/
+}*/
 
 long difference(int a, int b, int importance = 1)
 {
@@ -308,37 +469,55 @@ long compareinstr(INSTRUMENT & a, INSTRUMENT  & b)
 
 int findinstr(int channel)
 {
-int besti = -1;
-long bestdiff = 0;
-
-  for (int i = 0; i<  instrcnt; i++)
-  {
-    long diff = compareinstr(instr[i], reg[channel]);
-    if (besti < 0 || diff < bestdiff)
-    {
-      bestdiff = diff;
-      besti = i;
-      if (bestdiff == 0)
-	break;
-    }
-  }
-	if (bestdiff != 0) {
-		// Couldn't find an exact match, print the details
-	 fprintf(stderr, "No match in any .reg file for instrument on channel %d:\n--- Begin iX.reg ---\n", channel);
-	 printf("Program: ?\n");
-	 printf("20: %02X %02X\n", reg[channel].reg20[0], reg[channel].reg20[1]);
-	 printf("40: %02X %02X\n", reg[channel].reg40[0], reg[channel].reg40[1]);
-	 printf("60: %02X %02X\n", reg[channel].reg60[0], reg[channel].reg60[1]);
-	 printf("80: %02X %02X\n", reg[channel].reg80[0], reg[channel].reg80[1]);
-	 printf("C0: %02X\n", reg[channel].regC0);
-	 printf("E0: %02X %02X\n", reg[channel].regE0[0], reg[channel].regE0[1]);
-	 printf("--- End iX.reg ---\n");
-	 
-	 // Save this unknown instrument as a known one, so the registers don't get printed again
-	 reg[channel].prog = instr[besti].prog;  // but keep the same patch that we've already assigned, so it doesn't drop back to a piano for the rest of the song
-	 instr[instrcnt++] = reg[channel];
+	int besti = -1;
+	long bestdiff = -1;
+	for (int i = 0; i < instrcnt; i++)
+	{
+		long diff = compareinstr(instr[i], reg[channel]);
+		if (besti < 0 || diff < bestdiff)
+		{
+			bestdiff = diff;
+			besti = i;
+			if (bestdiff == 0) break;
+		}
 	}
-  return besti;
+//	if (instr[besti].redirect != -1) {
+		// This instrument was an automatically generated one to avoid printing the instrument definition multiple times, so
+		// instead of using the auto one, use the one it originally matched against.
+	if (besti >= 0) { // could be -1 if no instruments are loaded
+		while (instr[besti].redirect >= 0) {
+			// Could have multiple redirects
+			besti = instr[besti].redirect;
+		}
+	}
+//	}
+	if (bestdiff != 0) {
+		if (::bPerfectMatchesOnly) {
+			// User doesn't want "close enough is good enough" instrument guessing
+			besti = 0;  // use first instrument
+		}
+		// Couldn't find an exact match, print the details
+		printf("**| New instrument in use on channel %d - copy this into " MAPPING_FILE " to assign it a MIDI patch:\n", channel);
+		printf("  |   %02X-%02X/%02X-%02X/%02X-%02X/%02X-%02X/%02X/%02X-%02X: patch=?\n", reg[channel].reg20[0], reg[channel].reg20[1],
+			reg[channel].reg40[0], reg[channel].reg40[1],
+			reg[channel].reg60[0], reg[channel].reg60[1],
+			reg[channel].reg80[0], reg[channel].reg80[1],
+			reg[channel].regC0,
+			reg[channel].regE0[0], reg[channel].regE0[1]
+		);
+		printf("  | Using instrument #%d instead: %s\n\n", besti, instr[besti].name);
+		// Save this unknown instrument as a known one, so the same registers don't get printed again
+//		reg[channel].prog = instr[besti].prog;  // but keep the same patch that we've already assigned to the instrument, so it doesn't drop back to a piano for the rest of the song
+		// Maybe ^ isn't necessary if we're redirecting?
+		instr[instrcnt] = reg[channel];
+		if (besti >= 0) {
+			instr[instrcnt].redirect = besti;  // Next time this instrument is matched, use the original one instead
+		} else {
+			instr[instrcnt].redirect = -1;  // Will only happen when no instruments are loaded
+		}
+		instrcnt++;
+	}
+	return besti;
 }
 
 int main(int argc, char**argv)
@@ -349,19 +528,29 @@ int c;
   while (argc > 0 && **argv == '-')
   {
 		if (strncasecmp(*argv, "-r", 2) == 0) {
-			::bRhythm = true;
+			::bRhythm = false;
 		} else if (strncasecmp(*argv, "-p", 2) == 0) {
-			::bUsePitchBends = true;
+			::bUsePitchBends = false;
+		} else if (strncasecmp(*argv, "-a", 2) == 0) {
+			::bApproximatePitchbends = true;
+		} else if (strncasecmp(*argv, "-i", 2) == 0) {
+			::bPerfectMatchesOnly = true;
 		} else if (strncasecmp(*argv, "--version", 9) == 0) {
-		  version(0);
+			version();
+			return 0;
 		} else {
 			fprintf(stderr, "invalid option %s\n", *argv);
-	    usage(1);
+	    usage();
 		}
     argc--; argv++;
   }
   if (argc < 2)
-    usage(1);
+    usage();
+
+	if ((::bUsePitchBends) && (::bApproximatePitchbends)) {
+		fprintf(stderr, "ERROR: Pitchbends can only be approximated (-a) if proper MIDI pitchbends are disabled (-p)\n");
+		return 1;
+	}
 
   input = argv[0];
   output = argv[1];
@@ -370,6 +559,9 @@ int c;
     fprintf(stderr, "cannot convert to same file\n");
     return 1;
   }
+
+	if (!loadInstruments()) return 1;
+
 
   f = fopen(input, READ_BINARY);
   if (!f)
@@ -382,10 +574,11 @@ int c;
 	char cSig[9];
 	fseek(f, 0, SEEK_SET);
   fgets(cSig, 9, f);
+	iSpeed = 0;
 	if (strncmp(cSig, "DBRAWOPL", 8) == 0) {
 		::iFormat = FORMAT_DRO;
 		printf("Input file is in DOSBox DRO format.\n");
-		::iSpeed = 1000;
+		::iInitialSpeed = 1000;
 
 		fseek(f, 16, SEEK_SET); // seek to "length in bytes" field
 	  imflen = fgetc(f);
@@ -394,16 +587,17 @@ int c;
 	  imflen += fgetc(f) << 24;
 	} else if (strncmp(cSig, "RAWADATA", 8) == 0) {
 		::iFormat = FORMAT_RAW;
-		fprintf(stderr, "Input file is in Rdos RAW format.  This is not yet supported.\n");
+		printf("Input file is in Rdos RAW format.\n");
 
 		// Read until EOF (0xFFFF is really the end but we'll check that during conversion)
 		fseek(f, 0, SEEK_END);
 	  imflen = ftell(f);
 
-		fseek(f, 8, SEEK_SET); // seek to "length in bytes" field
+		fseek(f, 8, SEEK_SET); // seek to "initial clock speed" field
+		::iInitialSpeed = 1000;
 		int iClockSpeed = fgetc(f) + (fgetc(f) << 8L);
 		if ((iClockSpeed == 0) || (iClockSpeed == 0xFFFF)) {
-			::iSpeed = 1000; // default to 1000Hz
+			::iSpeed = (int)18.2; // default to 18.2Hz...well, 18Hz thanks to rounding
 		} else {
 			::iSpeed = (int)(1193180.0 / iClockSpeed);
 		}
@@ -416,21 +610,22 @@ int c;
 			fseek(f, 0, SEEK_SET);
 		} else {
 			printf("Input file appears to be in IMF type-1 format.\n");
-		  imflen = cSig[0] + (cSig[1] << 8);
+		  //imflen = cSig[0] + (cSig[1] << 8);  // doesn't seem to work, even if chars are forced unsigned?!  (try wolf3d/salute.imf)
+			fseek(f, 0, SEEK_SET);
+			imflen = fgetc(f) + (fgetc(f) << 8L);
 			fseek(f, 2, SEEK_SET);
 		}
 		if (strcasecmp(&input[strlen(input)-3], "imf") == 0) {
 			printf("File extension is .imf - using 560Hz speed (rename to .wlf if this is too slow)\n");
-			::iSpeed = 560;
+			::iInitialSpeed = 560;
 		} else if (strcasecmp(&input[strlen(input)-3], "wlf") == 0) {
 			printf("File extension is .wlf - using 700Hz speed (rename to .imf if this is too fast)\n");
-			::iSpeed = 700;
+			::iInitialSpeed = 700;
 		} else {
 			printf("Unknown file extension - must be .imf or .wlf\n");
 			return 3;
 		}
 	}
-	fflush(stdout);
 
   write = new MidiWrite(output);
   if (!write)
@@ -443,7 +638,8 @@ int c;
     perror(output);
     return 1;
   }
-	int iInitialSpeed = ::iSpeed;
+	if (iSpeed == 0) iSpeed == iInitialSpeed;
+//	int iInitialSpeed = ::iSpeed;
 	resolution = iInitialSpeed / 2;
   write->head(/* version */ 0, /* track count updated later */0, resolution);
 
@@ -455,9 +651,7 @@ int c;
   for (c = 0; c  <= 8; c++)
     lastprog[c] = -1;
 
-  loadinstruments();
-
-  printf("guessing instruments:\n");
+//  printf("guessing instruments:\n");
   for (c = 0; c <= 8; c++)
   {
     write->volume(c, 127);
@@ -467,14 +661,16 @@ int c;
   }
 
   int delay = 0;
+  int channel;
+  int code, param;
+	
   int octave = 0;
   int curfreq[9];
   bool keyAlreadyOn[9];
 	int lastkey[9];
-  int channel;
-  int code, param;
-	
 	int pitchbent[9];
+	int drumnote[9]; // note to play on MIDI channel 10 if Adlib channel has a percussive instrument assigned to it
+
 	
 	int rhythm[5]; // are these rhythm instruments currently playing?
   for (c = 0; c < 5; c++) rhythm[c] = 0;
@@ -482,11 +678,22 @@ int c;
   for (c = 0; c < 9; c++)
   {
     curfreq[c] = 0;
-    mapchannel[c] = c;
+    mapchannel[c] = c;  // This can get reset when playing a drum and then a normal instrument on a channel - see instrument-change code below
 		keyAlreadyOn[c] = false;
 		lastkey[c] = -1;
-		pitchbent[c] = pitchbend_center;
+		pitchbent[c] = (int)pitchbend_center;
+		drumnote[c] = 0; // probably not necessary...
+
+		if (::bUsePitchBends) {
+			write->control(mapchannel[c], 100, 0);  // RPN LSB for "Pitch Bend Sensitivity"
+			write->control(mapchannel[c], 101, 0);  // RPN MSB for "Pitch Bend Sensitivity"
+			write->control(mapchannel[c], 6, (int)PITCHBEND_RANGE); // Data for Pitch Bend Sensitivity (in semitones) - controller 38 can be used for cents in addition
+			write->control(mapchannel[c], 100, 0x7F);  // RPN LSB for "Finished"
+			write->control(mapchannel[c], 101, 0x7F);  // RPN MSB for "Finished"
+		}
+//		write->pitchbend(mapchannel[c], pitchbend_center);
   }
+	
 	int iMinLen; // Minimum length for valid notes to still be present
 	switch (::iFormat) {
 		case FORMAT_IMF: iMinLen = 4; break;
@@ -541,22 +748,28 @@ int c;
 		    code = fgetc(f);
 				imflen-=2;
 				switch (code) {
-					case 0x00: // delay (byte)
+					case 0x00: // delay
 						delay += param;//fgetc(f);
 						//imflen--;
 						continue;
-					case 0x02: // delay (int)
+					case 0x02: // control data
 						switch (param) {
-							case 0x00:
+							case 0x00: {
 								if (delay != 0) {
 									// See below - we need to write out any delay at the old clock speed before we change it
 							    write->time((delay * iInitialSpeed / ::iSpeed));
 									delay = 0;
 								}
-								::iSpeed = (int)(1193180.0 / (fgetc(f) | (fgetc(f) << 8L)));
-								//printf("Speed set to %d\n", iSpeed);
+								int iClockSpeed = fgetc(f) + (fgetc(f) << 8L);
+								if ((iClockSpeed == 0) || (iClockSpeed == 0xFFFF)) {
+									printf("Speed set to invalid value, ignoring speed change.\n");
+								} else {
+									::iSpeed = (int)round(1193180.0 / iClockSpeed);
+									printf("Speed changed to %dHz\n", iSpeed);
+								}
 								imflen -= 2;
 								break;
+							}
 							case 0x01:
 							case 0x02:
 								printf("Switching OPL ports is not yet implemented!\n");
@@ -577,16 +790,28 @@ int c;
 				// delay accordingly as the delay units are in the current clock speed.
 				// This calculation converts them into 1000Hz delay units regardless of
 				// the current clock speed.
-		    write->time((delay * iInitialSpeed / ::iSpeed));
+		    if (delay != 0) write->time((delay * iInitialSpeed / ::iSpeed));
 				//printf("delay is %d (ticks %d)\n", (delay * iInitialSpeed / ::iSpeed), delay);
 				delay = 0;
 				break;
+
+			default: // should never happen
+				break;
+
 		} // switch (::iFormat)
 
     if (code >= 0xa0 && code <= 0xa8) // set freq bits 0-7
     {
       channel = code-0xa0;
       curfreq[channel] = (curfreq[channel] & 0xF00) + (param & 0xff);
+			if (keyAlreadyOn[channel]) {
+				param = 0x20; // bare noteon for code below
+				octave = reg[channel].iOctave;
+				goto doNoteOn;
+//	      double keyFrac = freq2key(curfreq[channel], octave);
+//  	    int key = (int)round(keyFrac);
+//				doFreqChange(channel, key, keyFrac);
+			}
       continue;
     }
     else if (code >= 0xB0 && code <= 0xB8) // set freq bits 8-9 and octave and on/off
@@ -594,80 +819,129 @@ int c;
       channel = code - 0xb0;
       curfreq[channel] = (curfreq[channel] & 0x0FF) + ((param & 0x03)<<8);
       octave = (param >> 2) & 7;
-			reg[channel].iOctave = octave; // save in case rhythm instruments will be sounding on this channel
+			reg[channel].iOctave = octave; // save in case rhythm instruments will be sounding on this channel (??? - Malv)
+doNoteOn:  // yes I know, but it's easier this way
       int keyon = (param >> 5) & 1;
+
 
       //int key = freq2key(curfreq[channel], octave);
       double keyFrac = freq2key(curfreq[channel], octave);
       int key = (int)round(keyFrac);
 			//printf("key: %lf\n", key);
       if ((key > 0) && (keyon)) {
+				// This is set to true to forcibly stop a MIDI keyon being generated for this note.  This is done when
+				// a pitchbend is deemed as having done the job properly.
+				bool bKeyonAgain = true;
 
 				if (keyAlreadyOn[channel]) {
 					// There's already a note playing on this channel, just worry about the pitch of that
 
-	    	  if (::bUsePitchBends) {
-						double dbDiff = fabs(keyFrac - key); // should be between -0.9999 and 0.9999
-						if ((keyAlreadyOn[channel]) && (lastkey[channel] != key)) {
-							// Frequency has changed while note is playing
-						
-							// Start a pitch slide from the old note...
-							write->portamentotime(mapchannel[channel], lastkey[channel]);
-							printf("event: portamento to note\n");
-							// ...and slide to the next note played
+					if (mapchannel[channel] != gm_drumchannel) {
+						// We're using a normal instrument here
+
+						if (::bUsePitchBends) {
+								// It's the same note, but the pitch is off just slightly, use a pitchbend
+								//double dbDiff = fabs(keyFrac - key); // should be between -0.9999 and 0.9999
+								double dbDiff = keyFrac - (double)(lastkey[channel]); // hopefully between -PITCHBEND_RANGE and PITCHBEND_RANGE
+							
+								if (dbDiff > PITCHBEND_RANGE) {
+									fprintf(stderr, "Warning: This song wanted to pitchbend by %.2f notes, but the maximum is %.1f\n", dbDiff, PITCHBEND_RANGE);
+
+									// Turn this note off
+									write->noteoff(mapchannel[channel], lastkey[channel]);
+									lastkey[channel] = 0;
+									keyAlreadyOn[channel] = false;
+									// leave bKeyonAgain as true, so that a noteon will be played instead
+								} else {
+									int iNewBend = (int)(pitchbend_center + (PITCHBEND_ONESEMITONE * dbDiff));
+									if (iNewBend != pitchbent[channel]) {
+										//printf("pitchbend to %d/%.2lf (center + %d) (%.2lf semitones)\n", iNewBend, (double)pitchbend_center*2, (int)(iNewBend - pitchbend_center), (double)dbDiff);
+										write->pitchbend(mapchannel[channel], iNewBend); // pitchbends are between 0x0000L and 0x2000L
+										pitchbent[channel] = iNewBend;
+									}
+									// This pitchbend has done the job, don't play a noteon
+									bKeyonAgain = false;
+								}
 						} else {
-							// It's the same note, but the pitch is off just slightly
-							int iNewBend = (int)(pitchbend_center + 0x1000L * dbDiff);
-					    if (iNewBend != pitchbent[channel]) {
-								write->pitchbend(mapchannel[channel], pitchbent[channel]); // pitchbends are between 0x0000L and 0x2000L
-								pitchbent[channel] = iNewBend;
+							// We're not using pitchbends, so just switch off the note if it's different (the next one will play below)
+							if ((::bApproximatePitchbends) && (key != lastkey[channel])) {
+								write->noteoff(mapchannel[channel], lastkey[channel]);
+								lastkey[channel] = 0;
+								keyAlreadyOn[channel] = false;
+								//bKeyonAgain = true;
+							} else {
+								// Same note, different pitch, just pretend like it's not there
+								bKeyonAgain = false;
 							}
 						}
 					} else {
-						// We're not using pitchbends, so just switch off the note
-						write->noteoff(mapchannel[channel], lastkey[channel]);
-						lastkey[channel] = 0;
-						keyAlreadyOn[channel] = false;
+						// This is a percussive note, so no pitchbends.  But we don't want to play the note again, 'cos it's
+						// already on.
+						bKeyonAgain = false;
 					}
-				}
+				} // else this is a percussive instrument
 
 				//} else {
-				if ((!keyAlreadyOn[channel]) || (::bUsePitchBends)) {  // If *now* there's no note playing...
+				//if ((!bDontKeyonAgain) && ((!keyAlreadyOn[channel]) || (::bUsePitchBends))) {  // If *now* there's no note playing... (or we're using pitchbends, i.e. a portamento has been set up)
+				if (bKeyonAgain) {  // If *now* there's no note playing... (or we're using pitchbends, i.e. a portamento has been set up)
 					// See if we need to update anything
 
 					// See if the instrument needs to change
 					int i = findinstr(channel);
-					if (i >= 0 && instr[i].prog != lastprog[channel]) {
-						printf("channel %d set to: %s\n", channel, instr[i].name);
-						if (instr[i].prog >= 0 && !instr[i].isdrum && mapchannel[channel] == channel)
+					if (
+						(i >= 0) && (
+							(instr[i].prog != lastprog[channel]) ||
+							(
+								(instr[i].isdrum) &&
+								(drumnote[channel] != instr[i].note)
+							)
+						)
+					) {
+						printf("  channel %d set to: %s\n", channel, instr[i].name);
+						//if (instr[i].prog >= 0 && !instr[i].isdrum && mapchannel[channel] == channel)
+						if (instr[i].prog >= 0 && !instr[i].isdrum) {
+							if (mapchannel[channel] == gm_drumchannel) {
+								// This was playing drums, now we're back to normal notes
+								mapchannel[channel] = channel; // make sure this matches the init section above
+								drumnote[channel] = -1;
+							}
 							write->program(mapchannel[channel], lastprog[channel] = instr[i].prog);
-						else {
+						} else {
+							// This new instrument is a drum
 							mapchannel[channel] = gm_drumchannel;
 							lastprog[channel] = instr[i].prog;
+							assert(instr[i].prog == -1);
+							drumnote[channel] = instr[i].note;
 						}
 					}
 					
 					// Play the note
-	    	  if ((::bUsePitchBends) && (!keyAlreadyOn[channel])) {
-						double dbDiff = fabs(keyFrac - key); // should be between -0.9999 and 0.9999
+	    	  //if ((::bUsePitchBends) && (!keyAlreadyOn[channel])) {
+	    	  if ((::bUsePitchBends) && (mapchannel[channel] != gm_drumchannel)) { // If pitchbends are enabled and this isn't a percussion instrument
+						double dbDiff = keyFrac - key; // should be between -0.9999 and 0.9999
+						assert(dbDiff < PITCHBEND_RANGE); // not really necessary...
 
-						int iNewBend = (int)(pitchbend_center + 0x1000L * dbDiff);
+						int iNewBend = (int)(pitchbend_center + (PITCHBEND_ONESEMITONE * dbDiff));
 				    if (iNewBend != pitchbent[channel]) {
-							write->pitchbend(mapchannel[channel], pitchbent[channel]); // pitchbends are between 0x0000L and 0x2000L
+							//printf("new note at pitchbend %d\n", iNewBend);
+							write->pitchbend(mapchannel[channel], iNewBend); // pitchbends are between 0x0000L and 0x2000L
 							pitchbent[channel] = iNewBend;
 						}
 					}
+
 					int level = reg[channel].reg40[0] & 0x3f;
 					if (level > (reg[channel].reg40[1] & 0x3f))
 					level = reg[channel].reg40[1] & 0x3f;
-					write->noteon(mapchannel[channel], key, (0x3f - level) << 1);
-					
-					if ((::bUsePitchBends) && (keyAlreadyOn[channel])) {
-						// There was a note already playing, so we probably portamento'd to this note.
-						// We still need to switch off the old note.
-						write->noteoff(mapchannel[channel], lastkey[channel]);
+					if (mapchannel[channel] != gm_drumchannel) {
+						// Normal note
+						write->noteon(mapchannel[channel], key, (0x3f - level) << 1);
+						lastkey[channel] = key;
+					} else {
+						// Percussion
+						write->noteon(gm_drumchannel, drumnote[channel], (0x3f - level) << 1);
+						lastkey[channel] = drumnote[channel];
 					}
-					lastkey[channel] = key;
+
 					keyAlreadyOn[channel] = true;
 					
 				}
@@ -676,21 +950,11 @@ int c;
 				write->noteoff(mapchannel[channel], lastkey[channel]);
 				lastkey[channel] = 0;
 				keyAlreadyOn[channel] = false;
+				//pitchbent[channel] = pitchbend_center;
 			}
     }
 		else if ((code == 0xBD) && (::bRhythm))
 		{
-			#define KEY_BASSDRUM  36 // MIDI bass drum
-			#define KEY_SNAREDRUM 38 // MIDI snare drum
-			#define KEY_TOMTOM    41 // MIDI tom 1
-			#define KEY_TOPCYMBAL 57 // MIDI crash cymbal
-			#define KEY_HIHAT     42 // MIDI closed hihat
-
-			#define CHAN_BASSDRUM  6 // Bass drum sits on OPL channel 7
-			#define CHAN_TOMTOM    8 // Tom tom sits on OPL channel 9 (modulator only)
-			
-			#define PATCH_BASSDRUM 116 // MIDI Taiko drum
-			#define PATCH_TOMTOM   117 // MIDI melodic drum
 			
 			// TODO: Correlate 'total level' (reg40) with the operator for the particular rhythm instrument
 /*						int level = reg[channel].reg40[0] & 0x3f;
@@ -700,6 +964,7 @@ int c;
 			// Rhythm mode instruments
 			if ((param >> 5) & 1) {
 				// Rhythm mode is active
+
 				if ((param >> 4) & 1) {
 					// Bass drum
 
@@ -728,10 +993,12 @@ int c;
 					//write->noteon(gm_drumchannel, KEY_BASSDRUM, (0x3f - level) << 1);
 					write->noteon(channel, key, (0x3f - level) << 1);
 
-					rhythm[4] = 1;
+					rhythm[4] = key;
 				} else if (rhythm[4]) {
 					// Bass drum off
-					write->noteoff(gm_drumchannel, KEY_BASSDRUM);
+					int channel = CHAN_BASSDRUM;
+					//write->noteoff(gm_drumchannel, KEY_BASSDRUM);
+					write->noteoff(channel, rhythm[4]);
 					rhythm[4] = 0;
 				}
 				if ((param >> 3) & 1) {
@@ -752,7 +1019,7 @@ int c;
 					level = reg[channel].reg40[1] & 0x3f;
 
 					if (lastprog[channel] != PATCH_TOMTOM) {
-						printf("channel %d: Rhythm-mode bass drum\n", channel);
+						printf("channel %d: Rhythm-mode tom tom\n", channel);
 						write->program(mapchannel[channel], PATCH_TOMTOM);
 //						mapchannel[channel] = gm_drumchannel;
 						lastprog[channel] = PATCH_TOMTOM;
@@ -771,10 +1038,12 @@ int c;
 					write->noteon(channel, key, (0x3f - level) << 1);
 
 //					write->noteon(gm_drumchannel, KEY_TOMTOM, (0x3f - level) << 1);
-					rhythm[2] = 1;
+					rhythm[2] = key;
 				} else if (rhythm[2]) {
 					// Tom tom off
-					write->noteoff(gm_drumchannel, KEY_TOMTOM);
+					int channel = CHAN_TOMTOM;
+					//write->noteoff(gm_drumchannel, KEY_TOMTOM);
+					write->noteoff(channel, rhythm[2]);
 					rhythm[2] = 0;
 				}
 				if ((param >> 1) & 1) {
@@ -797,9 +1066,11 @@ int c;
 				}
 			} else {
 				// Rhythm is off, make sure all the instruments are too
-				if (rhythm[4]) { write->noteoff(gm_drumchannel, KEY_BASSDRUM);  rhythm[4] = 0; }
+//			if (rhythm[4]) { write->noteoff(gm_drumchannel, KEY_BASSDRUM);  rhythm[4] = 0; }
+				if (rhythm[4]) { write->noteoff(CHAN_BASSDRUM,  rhythm[4]);     rhythm[4] = 0; }
 				if (rhythm[3]) { write->noteoff(gm_drumchannel, KEY_SNAREDRUM); rhythm[3] = 0; }
-				if (rhythm[2]) { write->noteoff(gm_drumchannel, KEY_TOMTOM);    rhythm[2] = 0; }
+//			if (rhythm[2]) { write->noteoff(gm_drumchannel, KEY_TOMTOM);    rhythm[2] = 0; }
+				if (rhythm[2]) { write->noteoff(CHAN_TOMTOM,    rhythm[2]);     rhythm[2] = 0; }
 				if (rhythm[1]) { write->noteoff(gm_drumchannel, KEY_TOPCYMBAL); rhythm[1] = 0; }
 				if (rhythm[0]) { write->noteoff(gm_drumchannel, KEY_HIHAT);     rhythm[0] = 0; }
 			}
@@ -838,5 +1109,7 @@ int c;
 
   delete write;
   fclose(f);
+
+	printf("\nConversion complete.  Wrote %s\n", output);
   return 0;
 }

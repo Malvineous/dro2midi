@@ -1,0 +1,12 @@
+Some notes
+----------
+
+To convert all the i*.reg instrument files into the new format, do this (under
+Linux)
+
+  for I in i*.reg; do echo `fromdos < $I` | awk '{print $4 "-" $5 "/" $7 "-" $8 "/" $10 "-" $11 "/" $13 "-" $14 "/" $16 "/" $18 "-" $19 ": patch=" $2+1}'; done >> inst.txt
+
+I already did this for the default files, so you'll only need to do it if you've
+amassed a large collection of .reg files.  Alternatively if you don't use Linux
+feel free to e-mail the .reg files to me and I'll convert them for you (and add
+them into the distribution for future releases.)
