@@ -1,182 +1,483 @@
 #
-# Patch mapping file for DRO2MIDI
+# Patch mapping file for DRO2MIDI v1.4
 #
 # If you add a number of new patches to this file, please e-mail them to me
 # at malvineous@shikadi.net so that I can include them in the next version.
 #
+# The lines to put in this file are printed automatically when an unknown
+# instrument is encountered, but should you need to tinker further, the basic
+# format is:
+#
+#  <instrument type> <OPL register settings>: <options>
+#
+# The instrument type indicates what the register settings refer to:
+#
+#  NO - normal instrument
+#  BD - rhythm-mode bass drum
+#  SD - rhythm mode snare drum
+#  TT - rhythm mode tom tom
+#  TC - rhythm mode top cymbal
+#  HH - rhythm mode hi-hat
+#
+# To understand the register settings please see the code and the Adlib
+# docs.
+#
+# The options (probably the only bit you'll ever need to change) are
+# as follows:
+#
+#  patch=123     - set this instrument to MIDI patch 123.  MIDI patches
+#                  start at 1.  See patch.txt for a list.
+#  drum=123      - set this instrument to MIDI percussion on GM channel 10 with
+#                  note number 123.  See drum.txt for a list.
+#  transpose=12  - transpose this instrument's notes by the given number
+#                  of semitones.  12 is up one whole octave, -12 is down
+#                  one whole octave.  Default is zero.
+#  mute          - temporarily mute this instrument.
+#
+# At the minimum you must specify either "patch" or "drum", but never both on
+# the same line.
+#
 
-00-00/00-00/00-00/00-00/00/00-00: patch=1   # Default patch: Grand Piano
+NO 00-00/00-00/00-00/00-00/00/00-00: patch=1   # Default patch: Grand Piano
 
-01-21/18-84/D4-C4/F2-8A/0A/00-00: patch=30  # Overdriven guitar
-11-11/0A-13/FE-F2/04-BD/08/00-00: patch=31  # Distortion guitar
-11-54/43-44/F1-F0/FF-FF/08/00-03: patch=31  # Distortion guitar
+# Rhythm-mode base/defaults
+BD 00-00/0B-0C/A8-D6/4C-4F/00/00-00: patch=117 # Default bass drum: Taiko
+SD 0C/0F/F8/B6/02: drum=52                     # Default snare: Splash Cymbal
+HH 01/00/F7/B5/00/00: drum=42                  # Default hi-hat: Closed Hi-Hat
+TC 01/00/2F/FF/00: patch=120 transpose=24      # Default top-cymbal: Reverse cymbal - transposed to make it attack faster :-/
+TT 04/00/F7/B5/A4/00: patch=118                # Default tom-tom: Melodic Tom
+SD 0C/00/F8/B5/00: drum=38                     # Alternate snare - a snare!
+BD 00-00/0B-00/A8-D6/4C-4F/00/00-00: patch=117 # Another Taiko for a different (quieter) Bass Drum
 
-# Doofus (#4)
-00-00/00-02/F4-F5/23-43/01/03-00: patch=88  # Lead 8 (bass + lead)
-F1-31/82-43/F3-F4/22-22/01/01-03: patch=87  # Lead 7 (fifths)
-D2-10/82-02/F3-F1/11-21/01/02-03: patch=80
+NO 01-21/18-84/D4-C4/F2-8A/0A/00-00: patch=30  # Overdriven guitar
+NO 11-11/0A-13/FE-F2/04-BD/08/00-00: patch=31  # Distortion guitar
+NO 11-54/43-44/F1-F0/FF-FF/08/00-03: patch=31  # Distortion guitar
 
-# Wolf3d (#7)
-06-00/00-2E/F0-F7/F0-F7/0E/00-00: drum=38   # Acoustic snare
-71-22/C3-1D/8E-8B/17-0E/02/00-00: patch=59  # Tuba
-00-00/0D-16/E8-A5/EF-FF/06/00-00: patch=33  # Acoustic bass
-21-21/9A-9B/53-A0/56-16/0E/00-00: patch=58  # Trombone
-32-11/44-0C/F8-F5/FF-7F/0E/00-00: patch=128 # Gunshot (marching sound)
-13-E1/4D-1C/FA-F1/11-F1/08/00-00: patch=99  # Oboe
-06-00/00-1F/55-F8/F0-F5/0E/00-00: drum=42   # Closed hi-hat
-02-01/29-9B/F0-F4/75-33/00/00-00: patch=10  # Glockenspiel
-A2-E2/1D-9F/95-60/24-2A/02/00-00: patch=101
-32-61/9A-A3/51-60/19-39/0C/00-00: drum=35 # Synth drum
-00-00/40-10/09-F7/53-94/00/00-00: patch=117 # Taiko
-A2-E2/1D-9B/95-60/24-2A/02/00-00: patch=24  # Tango Accordion
-71-61/56-16/51-54/03-17/0E/00-00: patch=23  # Harmonica
-70-22/8D-25/6E-6B/17-0E/02/00-00: patch=22  # Accordion
-32-11/44-11/F8-F5/FF-7F/0E/00-00: drum=41   # Low floor tom
-31-61/1B-21/61-D2/06-36/0C/00-00: patch=58  # Trombone
-31-61/1F-16/31-50/06-36/0C/00-00: patch=57  # Trumpet
-70-22/8D-16/6E-6B/17-0E/02/00-00: patch=69  # Oboe
+# Doofus
+NO 00-00/00-02/F4-F5/23-43/01/03-00: patch=88  # Lead 8 (bass + lead)
+NO F1-31/82-43/F3-F4/22-22/01/01-03: patch=87  # Lead 7 (fifths)
+NO D2-10/82-02/F3-F1/11-21/01/02-03: patch=80
 
-00-00/0B-01/A8-D6/4C-4F/00/00-00: drum=36
-#32-11/44-3F/F8-F5/FF-7F/0E/00-00: patch=70
-32-61/9A-93/51-60/19-39/0C/00-00: patch=71
-A2-E2/1D-91/95-60/24-2A/02/00-00: patch=72
-31-22/C3-1F/87-8B/17-0E/02/00-00: patch=70
-31-22/C3-11/87-8B/17-0E/02/00-00: patch=70
+# Wolf3d
+NO 06-00/00-2E/F0-F7/F0-F7/0E/00-00: drum=38   # Acoustic snare
+NO 71-22/C3-1D/8E-8B/17-0E/02/00-00: patch=59  # Tuba
+NO 00-00/0D-16/E8-A5/EF-FF/06/00-00: patch=33  # Acoustic bass
+NO 21-21/9A-9B/53-A0/56-16/0E/00-00: patch=58  # Trombone
+NO 32-11/44-0C/F8-F5/FF-7F/0E/00-00: patch=128 # Gunshot (marching sound)
+NO 13-E1/4D-1C/FA-F1/11-F1/08/00-00: patch=69  # Oboe (pregnant.wlf)
+NO 06-00/00-1F/55-F8/F0-F5/0E/00-00: drum=42   # Closed hi-hat
+NO 02-01/29-9B/F0-F4/75-33/00/00-00: patch=10  # Glockenspiel
+NO A2-E2/1D-9F/95-60/24-2A/02/00-00: patch=101
+NO 32-61/9A-A3/51-60/19-39/0C/00-00: drum=35   # Synth drum
+NO 00-00/40-10/09-F7/53-94/00/00-00: patch=117 # Taiko
+NO A2-E2/1D-9B/95-60/24-2A/02/00-00: patch=24  # Tango Accordion
+NO 71-61/56-16/51-54/03-17/0E/00-00: patch=23  # Harmonica
+NO 70-22/8D-25/6E-6B/17-0E/02/00-00: patch=22  # Accordion
+NO 32-11/44-11/F8-F5/FF-7F/0E/00-00: drum=41   # Low floor tom
+NO 31-61/1B-21/61-D2/06-36/0C/00-00: patch=58  # Trombone
+NO 31-61/1F-16/31-50/06-36/0C/00-00: patch=57  # Trumpet
+NO 70-22/8D-16/6E-6B/17-0E/02/00-00: patch=69  # Oboe
 
-# Cosmo (first is inst #30)
-11-01/44-06/F8-F7/FF-45/00/00-00: drum=36
-05-00/00-10/F0-FA/77-E5/0E/00-00: drum=42   # Closed hi-hat
-05-00/00-09/F0-F8/FF-B9/0E/01-00: drum=42
-05-00/00-12/F0-F6/FF-FF/0E/00-00: drum=44
-24-21/D0-16/F0-E0/01-86/02/00-00: patch=76  # Pan flute
-2C-A1/D4-1F/F9-C0/FF-FF/00/00-00: patch=13  # Marimba
-71-61/56-1F/51-54/03-17/0E/00-00: patch=80  # Ocarina
-E2-E1/CA-1F/F8-C0/E5-0E/08/00-00: patch=80  # Ocarina
+NO 00-00/0B-01/A8-D6/4C-4F/00/00-00: drum=36
+#NO 32-11/44-3F/F8-F5/FF-7F/0E/00-00: patch=70
+NO 32-61/9A-93/51-60/19-39/0C/00-00: patch=71
+NO 31-22/C3-1F/87-8B/17-0E/02/00-00: patch=70
+NO 31-22/C3-11/87-8B/17-0E/02/00-00: patch=70
+#wonderin.wlf
+NO A2-E2/1D-91/95-60/24-2A/02/00-00: patch=36 transpose=12 #72
+NO 05-00/00-1E/F0-FA/77-E5/0E/00-00: drum=42
+NO 31-21/16-0C/73-80/8E-9E/0E/00-00: patch=88
+NO 21-21/9A-8E/53-A0/56-16/0E/00-00: patch=71
 
-11-54/43-56/F1-F0/FF-FF/08/00-03: patch=30  # Overdriven guitar
-11-54/43-4A/F1-F0/FF-FF/08/00-03: patch=31  # Distortion guitar
-21-21/15-96/D3-C3/2C-2C/0A/00-00: patch=33
-01-11/4F-1C/F1-F2/53-74/06/00-00: patch=13
-00-00/00-11/F0-F6/FF-FF/04/00-00: patch=106
-30-23/16-0C/71-88/EE-1E/0E/00-00: patch=69
-#31-22/C3-0C/87-8B/17-0E/02/00-00: patch=1
-61-21/19-0C/73-A0/57-17/0C/00-00: patch=71
-01-21/18-91/D4-C4/F2-8A/0A/00-00: patch=36
+NO 02-01/29-8D/F0-F4/75-33/00/00-00: patch=117
+NO 02-01/29-96/F5-F2/75-F3/00/00-00: patch=71
 
-32-11/44-0B/F8-F5/FF-7F/0E/00-00: drum=49   # Crash cymbal 1
-32-11/44-0D/F8-F5/FF-7F/0E/00-00: drum=57   # Crash cymbal 2
+# Cosmo
+NO 11-01/44-06/F8-F7/FF-45/00/00-00: drum=36
+NO 05-00/00-10/F0-FA/77-E5/0E/00-00: drum=42   # Closed hi-hat
+NO 05-00/00-09/F0-F8/FF-B9/0E/01-00: drum=42
+NO 05-00/00-12/F0-F6/FF-FF/0E/00-00: drum=44
+NO 24-21/D0-16/F0-E0/01-86/02/00-00: patch=76  # Pan flute
+NO 2C-A1/D4-1F/F9-C0/FF-FF/00/00-00: patch=13  # Marimba
+NO 71-61/56-1F/51-54/03-17/0E/00-00: patch=80  # Ocarina
+NO E2-E1/CA-1F/F8-C0/E5-0E/08/00-00: patch=80  # Ocarina
 
-# Vinyl (first is #48)
-21-06/40-80/F1-F4/31-44/00/00-00: patch=81  # Square
-F1-21/01-0B/97-F1/17-18/04/00-00: patch=82  # Sawtooth
-32-11/44-00/F8-F5/FF-7F/0E/00-00: patch=13  # Marimbas
+NO 11-54/43-56/F1-F0/FF-FF/08/00-03: patch=30  # Overdriven guitar
+NO 11-54/43-4A/F1-F0/FF-FF/08/00-03: patch=31  # Distortion guitar
+NO 21-21/15-96/D3-C3/2C-2C/0A/00-00: patch=33
+NO 01-11/4F-1C/F1-F2/53-74/06/00-00: patch=13
+NO 00-00/00-11/F0-F6/FF-FF/04/00-00: patch=106
+NO 30-23/16-0C/71-88/EE-1E/0E/00-00: patch=69
+#NO 31-22/C3-0C/87-8B/17-0E/02/00-00: patch=1
+NO 61-21/19-0C/73-A0/57-17/0C/00-00: patch=71
+NO 01-21/18-91/D4-C4/F2-8A/0A/00-00: patch=36
 
-# Jill (first is #51)
-00-01/2A-00/F2-F5/1F-88/0C/00-00: patch=19  # Rock organ
-05-01/4E-00/DA-F9/25-15/0A/00-00: patch=13  # Marimbas
-CA-CC/84-00/F0-59/F0-62/0C/00-00: patch=30  # Overdriven guitar
-00-51/1C-80/13-52/13-B2/0C/00-00: patch=13  # Marimbas
-21-51/1C-80/13-52/12-B2/0C/00-00: patch=33  # Acoustic bass
-A1-A1/27-80/74-65/8F-2A/02/00-00: patch=12  # Vibraphone
-18-25/88-80/FB-F4/22-12/08/00-00: patch=15  # Tubular bells
-00-01/00-00/FA-F3/13-7A/00/00-00: patch=33
-70-71/C8-80/D5-26/11-11/0A/00-00: patch=93
-20-21/8E-00/A5-36/8F-3D/06/00-00: patch=89
-50-01/00-00/FA-F3/71-7A/00/00-00: patch=95
-07-12/4F-00/F2-F2/60-72/08/00-00: patch=15  # Tubular bells
+NO 32-11/44-0B/F8-F5/FF-7F/0E/00-00: drum=49   # Crash cymbal 1
+NO 32-11/44-0D/F8-F5/FF-7F/0E/00-00: drum=57   # Crash cymbal 2
+#mrockit.imf
+NO 2C-A1/D4-1B/F9-C0/FF-FF/00/00-00: patch=14
+NO 05-00/00-0D/F0-FA/77-E5/0E/00-00: drum=42
+NO 71-21/1C-0C/51-54/03-17/0E/00-00: patch=31 #82
+NO 00-00/0B-0D/A8-D6/4C-4F/00/00-00: drum=38
+NO 07-61/51-0C/F5-F0/33-25/06/00-00: patch=12
 
-# Kiloblaster (#63)
-00-08/40-40/F1-F1/53-53/08/00-00: patch=31 #82
-47-05/40-00/FF-FF/06-06/00/00-00: patch=108 # Koto
-50-00/00-00/FB-F3/71-B9/00/00-00: patch=33  # Acoustic bass
-00-00/00-00/FB-F3/71-B9/00/00-00: patch=40  # Synth bass 2
-00-01/00-00/75-F5/93-82/00/00-00: patch=37  # Slap bass 1
-02-01/29-80/F5-F2/75-F3/00/00-00: patch=108 # Koto
+# Vinyl Goddess from Mars
+NO 21-06/40-80/F1-F4/31-44/00/00-00: patch=81  # Square
+NO F1-21/01-0B/97-F1/17-18/04/00-00: patch=82  # Sawtooth
+NO 32-11/44-00/F8-F5/FF-7F/0E/00-00: patch=13  # Marimbas
 
-# Major Stryker (#69)
-01-21/18-89/D4-C4/F2-8A/0A/00-00: patch=117
-01-01/19-1A/F0-F0/FF-FF/04/00-00: patch=17
-#07-12/0A-1F/F2-F2/60-52/00/03-03: patch=53  # Choir Aahs
-31-21/16-0B/73-80/8E-9E/0E/00-00: patch=36
-30-21/16-0B/73-80/7E-9E/0E/00-00: patch=40
-31-21/16-1B/73-80/8E-9E/0E/00-00: patch=92
+# Jill
+NO 00-01/2A-00/F2-F5/1F-88/0C/00-00: patch=19  # Rock organ
+NO 05-01/4E-00/DA-F9/25-15/0A/00-00: patch=13  # Marimbas
+NO CA-CC/84-00/F0-59/F0-62/0C/00-00: patch=30  # Overdriven guitar
+NO 00-51/1C-80/13-52/13-B2/0C/00-00: patch=13  # Marimbas
+NO 21-51/1C-80/13-52/12-B2/0C/00-00: patch=33  # Acoustic bass
+NO A1-A1/27-80/74-65/8F-2A/02/00-00: patch=12  # Vibraphone
+NO 18-25/88-80/FB-F4/22-12/08/00-00: patch=113 # Tinkle bell   #15 # Tubular bells
+NO 00-01/00-00/FA-F3/13-7A/00/00-00: patch=33
+NO 70-71/C8-80/D5-26/11-11/0A/00-00: patch=93
+NO 20-21/8E-00/A5-36/8F-3D/06/00-00: patch=89
+NO 50-01/00-00/FA-F3/71-7A/00/00-00: patch=95
+NO 07-12/4F-00/F2-F2/60-72/08/00-00: patch=15  # Tubular bells
 
-# Body Count (#74)
-01-01/8C-8A/F2-A0/94-5B/00/02-03: patch=82  # Sawtooth
-20-24/CD-89/D5-61/29-1B/00/00-01: patch=31  # Dist guit
-00-00/0B-00/A8-D6/4C-4F/00/00-00: drum=36
-26-01/0A-00/FD-F8/0F-4A/0C/00-00: drum=44
+NO 21-01/2A-00/F2-F5/1F-88/0C/00-00: patch=36
+HH 01/00/F7/B5/01/00: drum=46                  # Open Hi-Hat
+HH 01/10/F7/B5/01/00: drum=42
+#BD 00-00/0B-02/A8-D6/4C-4F/00/00-00: patch=1
+#BD 00-00/0B-04/A8-D6/4C-4F/00/00-00: patch=1
+SD 0C/04/F7/A7/00: drum=38
+HH 01/00/DA/18/F8/00: drum=42
 
-# Monster Bash (#77)
-00-11/02-82/F0-F0/FF-FF/06/00-00: patch=82  # Sawtooth
-01-01/04-02/F1-F1/01-04/06/00-00: patch=82  # Sawtooth
-21-31/4F-0A/F1-F2/11-11/06/00-00: patch=13  # Marimbas (demons.imf starting note)
-13-91/97-8B/9A-9B/12-11/0E/00-00: patch=71  # Bassoon  #69  # Oboe
-21-A2/87-91/74-65/17-17/07/00-00: patch=61  # French horn
-22-21/16-0B/63-71/FD-FE/0E/00-00: patch=72  # Clarinet
-21-A2/8A-93/74-65/17-17/07/00-00: patch=70  # English horn
-0C-00/0D-0D/F8-D6/B5-4F/01/00-00: patch=11
-0C-00/15-15/F8-D6/B5-4F/01/00-00: patch=14
-B4-D7/87-92/A4-45/02-42/06/00-00: patch=49
-E0-B1/9A-08/F7-F9/0F-0B/08/00-00: patch=43
-B2-B1/D1-85/91-91/2A-2A/09/02-01: patch=66
-06-C4/00-01/FF-FB/F0-FF/0E/00-00: drum=69   # Casaba
-00-C4/40-12/80-C0/7A-7E/08/00-00: patch=72
-21-28/CD-CD/FF-FF/0F-0F/01/00-00: patch=20  # Pipe organ
-40-00/41-0C/73-8F/71-01/0A/00-00: patch=43
-06-C4/00-07/FF-FB/F0-FF/0E/00-00: patch=116
-D0-9E/80-04/F4-A2/E4-06/08/00-00: drum=81   # Open triangle
-D0-9E/80-02/F4-A2/E4-06/08/00-00: patch=113 # Tinkle bell
-20-11/90-10/F5-F4/9D-78/0C/02-03: patch=17
 
-B1-61/1C-8B/41-92/1F-3B/0E/00-00: patch=49
-31-0A/00-3F/F1-F2/F3-32/04/00-00: patch=43
-07-14/8F-BF/82-82/7D-7D/0C/00-00: patch=1
-31-0A/00-11/F1-F2/F3-32/04/00-00: patch=71
-47-83/40-0F/B8-E5/84-8F/0E/00-00: patch=117
-06-C4/00-02/FF-FB/F0-FF/0E/00-00: patch=116
-06-C4/00-05/FF-FB/F0-FF/0E/00-00: patch=114
-21-23/23-93/A0-90/09-0A/0E/00-00: patch=46
+# Kiloblaster
+NO 00-08/40-40/F1-F1/53-53/08/00-00: patch=31 #82
+NO 47-05/40-00/FF-FF/06-06/00/00-00: patch=108 # Koto
+NO 50-00/00-00/FB-F3/71-B9/00/00-00: patch=33  # Acoustic bass
+NO 00-00/00-00/FB-F3/71-B9/00/00-00: patch=40  # Synth bass 2
+NO 00-01/00-00/75-F5/93-82/00/00-00: patch=37  # Slap bass 1
+NO 02-01/29-80/F5-F2/75-F3/00/00-00: patch=108 # Koto
 
-# Bio Menace (#105)
-32-11/44-06/F8-F5/FF-7F/0E/00-00: patch=76  # Pan flute
-01-01/4F-1D/F1-D3/50-7C/06/00-00: patch=21  # Reed organ
-01-21/18-9A/D4-C4/F2-8A/0A/00-00: patch=36  # Fretless bass
+# Major Stryker
+NO 01-21/18-89/D4-C4/F2-8A/0A/00-00: patch=117
+#NO 07-12/0A-1F/F2-F2/60-52/00/03-03: patch=53  # Choir Aahs
+NO 31-21/16-0B/73-80/8E-9E/0E/00-00: patch=34
+NO 30-21/16-0B/73-80/7E-9E/0E/00-00: patch=40
+NO 31-21/16-1B/73-80/8E-9E/0E/00-00: patch=92
+NO 01-01/1B-1A/F0-F0/FF-FF/04/00-00: patch=17 transpose=24
+NO 05-00/00-1A/F0-F6/FF-FF/0E/00-00: drum=35
+NO 06-00/00-0B/55-F8/F0-F5/0E/00-00: drum=38
+NO 31-21/16-0F/73-80/8E-9E/0E/00-00: patch=33
 
-# Duke II (#108)
-07-12/0A-1E/F2-F2/60-52/00/03-03: patch=33  # Acoustic bass
-07-12/0A-20/F2-F2/60-52/00/03-03: patch=33
-00-00/0B-07/A8-D6/4C-4F/00/00-00: drum=35
-07-12/0A-1B/F2-F2/60-52/00/03-03: patch=117
-07-12/0A-1F/F2-F2/60-52/00/03-03: patch=117
+# Body Count
+NO 01-01/8C-8A/F2-A0/94-5B/00/02-03: patch=82  # Sawtooth
+NO 20-24/CD-89/D5-61/29-1B/00/00-01: patch=31  # Dist guit
+NO 00-00/0B-00/A8-D6/4C-4F/00/00-00: drum=36
+NO 26-01/0A-00/FD-F8/0F-4A/0C/00-00: drum=44
+
+# Monster Bash
+NO 00-11/02-82/F0-F0/FF-FF/06/00-00: patch=82  # Sawtooth
+NO 01-01/04-02/F1-F1/01-04/06/00-00: patch=82  # Sawtooth
+NO 21-31/4F-0A/F1-F2/11-11/06/00-00: patch=13  # Marimbas (demons.imf starting note)
+NO 13-91/97-8B/9A-9B/12-11/0E/00-00: patch=71  # Bassoon  #69  # Oboe
+NO 21-A2/87-91/74-65/17-17/07/00-00: patch=61  # French horn
+NO 22-21/16-0B/63-71/FD-FE/0E/00-00: patch=72  # Clarinet
+NO 21-A2/8A-93/74-65/17-17/07/00-00: patch=70  # English horn
+NO 0C-00/0D-0D/F8-D6/B5-4F/01/00-00: patch=11
+NO 0C-00/15-15/F8-D6/B5-4F/01/00-00: patch=14
+NO B4-D7/87-92/A4-45/02-42/06/00-00: patch=49
+NO E0-B1/9A-08/F7-F9/0F-0B/08/00-00: patch=43  # Cello
+NO B2-B1/D1-85/91-91/2A-2A/09/02-01: patch=66
+NO 06-C4/00-01/FF-FB/F0-FF/0E/00-00: drum=69   # Casaba
+NO 00-C4/40-12/80-C0/7A-7E/08/00-00: patch=72
+NO 21-28/CD-CD/FF-FF/0F-0F/01/00-00: patch=20  # Pipe organ
+NO 40-00/41-0C/73-8F/71-01/0A/00-00: patch=82 transpose=-12 # Sawtooth wave
+NO 06-C4/00-07/FF-FB/F0-FF/0E/00-00: patch=116
+NO D0-9E/80-04/F4-A2/E4-06/08/00-00: drum=81   # Open triangle
+NO D0-9E/80-02/F4-A2/E4-06/08/00-00: patch=113 # Tinkle bell
+NO 20-11/90-10/F5-F4/9D-78/0C/02-03: patch=17
+
+NO B1-61/1C-8B/41-92/1F-3B/0E/00-00: patch=49
+NO 31-0A/00-3F/F1-F2/F3-32/04/00-00: patch=43
+#NO 07-14/8F-BF/82-82/7D-7D/0C/00-00: patch=1
+NO 47-83/40-0F/B8-E5/84-8F/0E/00-00: patch=117
+NO 06-C4/00-02/FF-FB/F0-FF/0E/00-00: patch=116
+NO 06-C4/00-05/FF-FB/F0-FF/0E/00-00: patch=114
+NO 21-23/23-93/A0-90/09-0A/0E/00-00: patch=46
+
+# Monster Bash (theme.imf)
+NO 31-0A/00-11/F1-F2/F3-32/04/00-00: patch=85
+BD 00-00/0B-17/A8-D6/4C-4F/00/00-00: patch=74  # Alt bass drum: Flute
+NO 13-91/97-8D/9A-9B/12-11/0E/00-00: patch=21
+
+# Bio Menace
+NO 32-11/44-06/F8-F5/FF-7F/0E/00-00: patch=76  # Pan flute
+NO 01-01/4F-1D/F1-D3/50-7C/06/00-00: patch=21  # Reed organ
+NO 01-21/18-9A/D4-C4/F2-8A/0A/00-00: patch=36  # Fretless bass
+
+#NO 00-00/0D-10/E8-A5/EF-FF/06/00-00: drum=36
+#NO 00-00/0D-1F/E8-A5/EF-FF/06/00-00: patch=1  #these seem too similar to be a drum and piano
+NO 30-35/35-11/F5-F0/F0-9B/02/00-00: patch=85
+
+NO 11-01/86-93/F2-A0/A8-A8/08/00-00: patch=85
+NO 00-00/0B-11/A8-D6/4C-4F/00/00-00: drum=36
+NO 06-00/00-0C/F0-F7/F0-F7/0E/00-00: drum=38
+
+# Duke II
+NO 07-12/0A-1E/F2-F2/60-52/00/03-03: patch=33  # Acoustic bass
+NO 07-12/0A-20/F2-F2/60-52/00/03-03: patch=33
+NO 00-00/0B-07/A8-D6/4C-4F/00/00-00: drum=35
+NO 07-12/0A-1B/F2-F2/60-52/00/03-03: patch=117
+NO 07-12/0A-1F/F2-F2/60-52/00/03-03: patch=117
+NO 11-54/43-49/F1-F0/FF-FF/08/00-03: patch=30  # Overdriven guitar
+NO 00-00/0B-0A/A8-D6/4C-4F/00/00-00: patch=19
+NO 05-00/00-1F/F0-FA/77-E5/0E/00-00: patch=37
+NO 05-00/00-20/F0-FA/77-E5/0E/00-00: drum=42  # background quick hihat
+NO 05-00/00-18/F0-FA/77-E5/0E/00-00: drum=42
+NO 06-00/00-0A/F0-F7/F0-F7/0E/00-00: drum=45
+NO 06-00/00-1A/F0-F7/F0-F7/0E/00-00: drum=38   # end of riff snare 1
+NO 06-00/00-12/F0-F7/F0-F7/0E/00-00: drum=40   # end of riff snare 2
+NO 11-54/43-40/F1-F0/FF-FF/08/00-03: patch=31  # Distortion guitar
+
+NO 11-11/0A-05/FE-F2/04-BD/08/00-00: patch=37
+NO 41-01/11-0C/F0-F0/FF-FF/0A/00-00: patch=30
+
+NO 21-21/15-86/D3-C3/2C-2C/0A/00-00: patch=36
+
+# Commander Keen - track18/Omegamatic
+NO 11-11/0C-1F/F2-F2/01-B6/08/00-00: patch=19 transpose=12
+NO 00-00/0B-1A/A8-D6/4C-4F/00/00-00: patch=13
+NO 01-21/18-8E/D4-C4/F2-8A/0A/00-00: patch=36
+NO 2B-21/CA-15/F8-C0/E5-FF/00/00-00: patch=60
+NO 06-00/00-16/F0-F7/F0-F7/0E/00-00: drum=38
+NO 20-21/1B-16/63-63/0A-0B/0C/00-00: patch=57
+NO 00-00/0B-22/A8-D6/4C-4F/00/00-00: patch=46
+NO 31-61/1B-16/61-D2/06-36/0C/00-00: patch=1
+
+NO 01-01/11-10/F0-F0/FF-F8/0A/00-00: patch=110
+NO 01-01/11-1B/F0-F0/FF-F8/0A/00-00: patch=110
+NO 01-01/11-1F/F0-F0/FF-F8/0A/00-00: patch=110
+NO 07-00/00-1B/F0-5C/F0-DC/0E/00-00: drum=70
+NO 00-02/40-12/09-F7/53-94/0E/00-00: patch=48 transpose=12 # Timpani
+
+NO 00-00/0D-23/E8-A5/EF-FF/06/00-00: patch=19
+NO 00-00/0D-1D/E8-A5/EF-FF/06/00-00: patch=19
+
+NO 21-21/15-8C/D3-C3/2C-2C/0A/00-00: patch=33
+NO 32-11/44-15/F8-F5/FF-7F/0E/00-00: patch=118
+
+# God of Thunder - song33.imf
+NO 32-11/44-10/F8-F5/FF-7F/0E/00-00: patch=117 #drum=42   # Closed Hi-Hat
+NO F1-21/01-10/77-81/17-18/02/00-00: patch=69  # Oboe (main tune)
+NO 21-21/15-0C/B4-94/4C-AC/0A/00-00: patch=21  # (bassy 1/4)
+NO 11-01/86-90/F2-A0/A8-A8/08/00-00: patch=19  # (bassy 2/4)
+NO 61-21/19-10/73-A0/57-17/0C/00-00: patch=21  # (bassy 3/4)
+NO 06-00/00-10/F4-F6/A0-46/0E/00-00: patch=59 transpose=-12 # (bassy 4/4, quiet few notes)
+NO 61-21/19-0E/53-A0/58-18/0C/00-00: patch=67  # English Horn (second tune)
+NO 64-61/C9-10/B0-F0/01-86/02/00-00: patch=81  # Square wave (third tune)
+# song01.imf
+NO 61-21/19-0E/73-A0/57-17/0C/00-00: patch=57  # Trumpet
+NO 00-00/0B-0B/A8-D6/4C-4F/00/00-00: patch=49  # Tuba
+NO 32-11/44-13/F8-F5/FF-7F/0E/00-00: drum=42   # Closed Hi-Hat
+# song02.imf
+NO 11-11/0A-0D/FE-F2/04-BD/08/00-00: patch=33
+NO 2B-21/CA-0E/F8-C0/E5-FF/00/00-00: patch=13
+# song04.imf
+NO 11-11/0A-10/FE-F2/04-BD/08/00-00: patch=33   # Acoustic Bass
+NO 03-01/8A-90/F0-F4/7B-7B/08/00-00: patch=25   # Acoustic Guitar
+NO A4-E2/12-90/F4-60/30-2A/02/00-00: patch=76   # Pan Flute
+NO 28-21/CF-10/F8-C0/E5-FF/00/00-00: patch=14   # Xylophone
+
+# Stunts
+NO 0F-00/3F-3F/F0-F6/00-06/0E/00-00: drum=36    # Closed Hi-Hat
+NO C0-00/3F-3F/F8-F1/F8-27/00/02-00: drum=42    # Acoustic Bass Drum
+NO 0F-00/3F-3F/F0-F0/F2-04/0C/00-00: drum=49    # Crash cymbal (one note at start)
+NO 02-26/3F-3F/F3-B5/F3-15/0E/00-00: patch=34 transpose=12  # Main bass line 33,19,34
+NO 0F-00/3F-3F/F0-FA/00-09/0E/00-00: drum=42    # Closed Hi-Hat
+NO E4-A2/3F-3F/74-F5/05-05/0D/00-03: patch=30 transpose=24  # Main tune 1
+NO 22-22/3F-3F/66-66/16-16/0B/02-02: patch=31 transpose=24  # Main tune 2
+NO 0F-00/3F-3F/F0-F7/00-27/0E/00-00: drum=40    # Snare, comes in after intro
+NO A2-E2/3F-3F/CF-B0/07-0C/07/02-03: patch=31   # Main tune backup
+NO C0-00/3F-3F/F0-F6/00-06/0C/02-00: patch=118  # Tomtom right at the end
+
+# Bubble Bobble (story.raw)
+NO 31-16/87-96/A1-7D/11-43/08/00-00: patch=6
+NO 01-11/4F-0F/F1-D2/53-74/06/00-00: patch=5
+NO 21-22/0D-80/E9-65/3A-6C/0A/00-00: patch=36
+NO 01-01/11-16/F2-F5/1F-88/0A/00-00: patch=25
+NO 32-61/9A-91/51-A2/1B-3B/0C/00-00: patch=2
+NO 01-08/40-4F/F1-F1/53-53/00/00-00: patch=62
+
+NO 21-21/9F-89/53-AA/5A-1A/0C/00-00: patch=113
+NO 21-22/0D-89/E9-65/3A-6C/0A/00-00: patch=36
+
+# Zone 66
+NO 00-00/34-00/F3-FF/60-04/0E/00-00: patch=92
+NO 61-C0/D2-00/F0-C2/00-F1/00/03-00: patch=80
+NO 00-00/9A-82/51-60/19-39/0C/01-01: patch=75
+NO 06-00/00-4A/F4-F7/A0-46/0E/00-00: drum=42
+NO 31-00/0D-00/E8-A5/EF-FF/06/00-00: drum=36
+NO 12-00/80-00/C8-A7/12-57/0E/02-00: drum=38
 
 # Old patches taken over from the .reg files
-01-01/11-1D/F0-F0/FF-F8/0A/00-00: patch=28
-00-00/3F-00/39-FF/F3-05/00/00-00: patch=34
-31-15/85-86/A1-73/10-33/08/00-00: patch=13
-02-01/29-94/F5-F2/75-F3/00/00-00: patch=11
-11-54/43-45/F1-F0/FF-FF/08/00-03: patch=82
-A1-E2/13-95/D6-60/AF-2A/02/00-00: patch=38
-11-54/43-45/F1-F0/FF-FF/08/00-03: patch=81
-A1-E2/13-95/D6-60/AF-2A/02/00-00: patch=84
-00-00/0B-17/A8-D6/4C-4F/00/00-00: patch=117
-21-21/9A-8C/53-A0/56-16/0E/00-00: patch=58
-21-21/15-8B/D3-C3/2C-2C/0A/00-00: patch=88
-61-21/19-07/53-A0/58-18/0C/00-00: patch=57
-21-21/9A-8C/53-A0/56-16/0E/00-00: patch=59
-B3-90/4A-1E/B6-D1/32-31/0E/00-00: patch=12
-05-00/00-08/F0-F8/FF-B9/0E/01-00: patch=116
-00-00/00-02/F4-F5/23-43/01/03-00: patch=22
-F1-31/82-43/F3-F4/22-22/01/01-03: patch=91
-D0-12/87-47/F6-F0/21-21/00/01-00: patch=36
-D0-11/02-02/F4-F5/23-43/01/03-00: patch=1
-D2-10/82-02/F3-F1/11-21/01/02-03: patch=23
-01-21/18-86/D4-C4/F2-8A/0A/00-00: patch=30
-D1-11/0B-0C/90-72/23-23/01/03-00: patch=24
-61-E1/A7-95/72-50/8E-1A/02/00-00: patch=64
-21-21/15-11/B4-94/4C-AC/0A/00-00: patch=34
-61-E1/A7-95/72-50/8E-1A/02/00-00: patch=70
-#A2-E2/1D-91/95-60/24-2A/02/00-00: patch=63
-11-11/0A-0B/FE-F2/04-BD/08/00-00: patch=36
-01-11/4F-3F/F1-F2/53-74/03/00-00: patch=10  # Glockenspiel
-00-00/3F-0C/39-FF/F3-05/00/00-00: patch=25
+NO 01-01/11-1D/F0-F0/FF-F8/0A/00-00: patch=28
+NO 00-00/3F-00/39-FF/F3-05/00/00-00: patch=34
+NO 31-15/85-86/A1-73/10-33/08/00-00: patch=13
+NO 02-01/29-94/F5-F2/75-F3/00/00-00: patch=11
+NO 11-54/43-45/F1-F0/FF-FF/08/00-03: patch=82
+NO A1-E2/13-95/D6-60/AF-2A/02/00-00: patch=38
+NO 11-54/43-45/F1-F0/FF-FF/08/00-03: patch=81
+NO A1-E2/13-95/D6-60/AF-2A/02/00-00: patch=84
+NO 00-00/0B-17/A8-D6/4C-4F/00/00-00: patch=117
+NO 21-21/9A-8C/53-A0/56-16/0E/00-00: patch=58
+NO 21-21/15-8B/D3-C3/2C-2C/0A/00-00: patch=88
+NO 61-21/19-07/53-A0/58-18/0C/00-00: patch=57
+NO 21-21/9A-8C/53-A0/56-16/0E/00-00: patch=59
+NO B3-90/4A-1E/B6-D1/32-31/0E/00-00: patch=12
+NO 05-00/00-08/F0-F8/FF-B9/0E/01-00: patch=116
+NO 00-00/00-02/F4-F5/23-43/01/03-00: patch=22
+NO F1-31/82-43/F3-F4/22-22/01/01-03: patch=91
+NO D0-12/87-47/F6-F0/21-21/00/01-00: patch=36
+NO D0-11/02-02/F4-F5/23-43/01/03-00: patch=1
+NO D2-10/82-02/F3-F1/11-21/01/02-03: patch=23
+NO 01-21/18-86/D4-C4/F2-8A/0A/00-00: patch=30
+NO D1-11/0B-0C/90-72/23-23/01/03-00: patch=24
+NO 61-E1/A7-95/72-50/8E-1A/02/00-00: patch=64
+NO 21-21/15-11/B4-94/4C-AC/0A/00-00: patch=34
+NO 61-E1/A7-95/72-50/8E-1A/02/00-00: patch=70
+#NO A2-E2/1D-91/95-60/24-2A/02/00-00: patch=63
+NO 11-11/0A-0B/FE-F2/04-BD/08/00-00: patch=36
+NO 01-11/4F-3F/F1-F2/53-74/03/00-00: patch=10  # Glockenspiel
+NO 00-00/3F-0C/39-FF/F3-05/00/00-00: patch=25
+
+
+# General MIDI assignments used by Creative Labs' MIDI player (PLAY.EXE)
+# These are last so that they can be overridden above
+
+NO 00-00/4F-00/F1-D2/51-43/06/00-00: patch=1
+NO 02-12/4F-00/F1-D2/51-43/02/00-00: patch=2
+NO 00-11/4A-00/F1-D2/53-74/06/00-00: patch=3
+NO 03-11/4F-00/F1-D2/53-74/06/01-01: patch=4
+NO 01-11/66-00/F1-D2/51-C3/06/00-00: patch=5
+NO C0-D2/52-00/F1-D2/53-94/06/00-00: patch=6
+NO 12-18/86-00/F3-FC/00-33/08/00-00: patch=7
+NO D0-12/4E-00/A8-92/32-A7/00/03-02: patch=8
+NO C8-D1/4F-00/F2-F3/64-77/08/00-00: patch=9
+NO 33-34/0E-00/01-7D/11-34/08/00-00: patch=10
+NO 17-16/50-00/D1-D3/52-92/04/00-01: patch=11
+NO E7-E1/21-00/F5-F6/77-14/08/00-00: patch=12
+NO 95-81/4E-00/DA-F9/25-15/0A/00-00: patch=13
+NO 27-21/1F-00/F5-F5/96-57/08/00-00: patch=14
+NO 87-F1/4E-80/B1-E6/33-42/00/00-00: patch=15
+NO 31-11/87-80/A1-7D/11-43/08/00-00: patch=16
+NO 32-B1/8C-00/91-A1/07-19/05/02-00: patch=17
+NO 31-B4/54-80/F1-F5/07-19/07/00-00: patch=18
+NO 24-21/40-49/FF-FF/0F-0F/01/00-00: patch=19
+NO D2-F1/44-80/91-A1/57-09/03/01-01: patch=20
+NO 01-02/52-80/F0-F0/1F-1F/0A/01-00: patch=21
+NO 21-32/4F-01/F2-52/0B-0B/0A/00-01: patch=22
+NO F0-F2/93-00/D8-B3/0B-0B/0A/02-01: patch=23
+NO 20-31/5D-00/F2-52/0B-0B/00/03-02: patch=24
+NO 01-01/1B-00/F4-F3/25-46/00/02-00: patch=25
+NO 11-01/0F-00/F4-F3/25-46/00/01-00: patch=26
+NO 01-01/27-00/F1-F4/1F-88/0A/02-00: patch=27
+NO 12-13/44-00/EA-D2/32-E7/00/01-01: patch=28
+NO 30-31/45-00/A4-F5/32-E7/00/03-00: patch=29
+NO 21-21/0F-00/F5-F1/17-78/04/02-01: patch=30
+NO 01-20/41-00/D1-C1/34-A5/04/03-03: patch=31
+NO 10-12/43-00/A7-E3/97-E7/00/03-02: patch=32
+NO 20-21/28-00/C5-D2/15-A4/0C/00-00: patch=33
+NO 30-21/16-00/F2-F3/9F-78/0C/00-00: patch=34
+NO 30-21/11-00/82-F3/9F-78/0A/00-00: patch=35
+NO 21-21/23-00/73-93/1A-87/0C/00-00: patch=36
+NO 30-21/0E-00/62-F3/55-68/0A/02-00: patch=37
+NO 30-22/0C-00/62-D5/B5-98/08/01-00: patch=38
+NO 70-72/93-40/64-A1/43-43/0A/00-00: patch=39
+NO 30-32/8D-80/44-92/43-43/0A/02-00: patch=40
+NO E1-E2/4E-00/65-61/43-44/00/02-02: patch=41
+NO A1-A2/8E-00/65-63/43-45/00/02-02: patch=42
+NO B0-61/87-40/D1-62/11-15/06/02-01: patch=43
+NO F0-20/8A-80/B1-A0/11-15/06/02-01: patch=44
+NO F1-E2/89-40/73-43/01-05/06/02-00: patch=45
+NO 31-21/57-80/F8-F7/F9-E6/0E/03-02: patch=46
+NO 32-01/24-80/F1-F5/35-35/00/00-00: patch=47
+NO 00-00/04-00/AA-D2/C8-B3/0A/00-00: patch=48
+NO E0-F1/4F-00/D4-55/0B-0B/0A/02-02: patch=49
+NO E0-F0/52-00/96-35/05-01/0A/02-02: patch=50
+NO E1-F1/4F-00/36-45/05-02/0A/02-02: patch=51
+NO E2-E1/48-80/21-41/43-45/00/02-01: patch=52
+NO E0-F1/16-00/41-20/52-72/00/02-02: patch=53
+NO E0-F1/11-00/01-D0/52-72/00/02-02: patch=54
+NO E0-F1/1A-00/61-30/52-73/00/00-02: patch=55
+NO 50-50/0B-00/84-A4/4B-99/0A/00-00: patch=56
+NO 31-61/1C-80/41-92/0B-3B/0E/00-00: patch=57
+NO B1-61/1C-00/41-92/1F-3B/0E/00-00: patch=58
+NO 20-21/18-00/52-A2/15-24/0C/00-00: patch=59
+NO C1-C1/94-80/74-A3/EA-F5/0E/02-01: patch=60
+NO 21-21/28-00/41-81/B4-98/0E/00-00: patch=61
+NO 21-21/1D-00/51-E1/AE-3E/0E/02-01: patch=62
+NO E0-E0/93-80/51-81/A6-97/0E/02-01: patch=63
+NO E0-E1/93-80/51-E1/A6-97/0E/02-01: patch=64
+NO E0-F2/4B-01/D8-B3/0B-0B/08/02-01: patch=65
+NO E0-F1/49-01/B8-B3/0B-0B/08/02-01: patch=66
+NO E0-F0/4E-01/98-C3/0B-0B/08/01-02: patch=67
+NO E0-F1/4C-01/88-D3/0B-0B/08/01-01: patch=68
+NO F1-E4/C5-00/7E-8C/17-0E/08/00-00: patch=69
+NO 60-72/4F-00/D8-B3/0B-0B/0A/00-01: patch=70
+NO 31-72/D1-80/D5-91/19-1B/0C/00-00: patch=71
+NO 32-71/C8-80/D5-73/19-1B/0C/00-00: patch=72
+NO E2-62/6A-00/9E-55/8F-2A/0E/00-00: patch=73
+NO E0-61/EC-00/7E-65/8F-2A/0E/00-00: patch=74
+NO 62-A2/88-83/84-75/27-17/09/00-00: patch=75
+NO 62-A2/84-83/84-75/27-17/09/00-00: patch=76
+NO E3-62/6D-00/57-57/04-77/0E/00-00: patch=77
+NO F1-E1/28-00/57-67/34-5D/0E/03-00: patch=78
+NO D1-72/C7-00/31-42/0F-09/0B/00-00: patch=79
+NO F2-72/C7-00/51-42/05-69/0B/00-00: patch=80
+NO 23-31/4F-00/51-60/5B-25/00/01-01: patch=81
+NO 22-31/48-00/31-C0/9B-65/00/02-01: patch=82
+NO F1-E1/28-00/57-67/34-0D/0E/03-00: patch=83
+NO E1-E1/23-00/57-67/04-4D/0E/03-00: patch=84
+NO E2-31/42-08/78-F3/0B-0B/08/01-01: patch=85
+NO E2-E2/21-00/11-40/52-73/08/01-01: patch=86
+NO 23-A4/C0-00/51-35/07-79/0D/01-02: patch=87
+NO 24-A0/C0-00/51-75/07-09/09/01-02: patch=88
+NO E0-F0/16-00/B1-E0/51-75/00/02-02: patch=89
+NO 03-A4/C0-00/52-F4/03-55/09/00-00: patch=90
+NO E1-E1/93-80/31-A1/A6-97/0A/01-01: patch=91
+NO F0-71/C4-80/10-11/01-C1/01/02-02: patch=92
+NO C1-E0/4F-00/B1-12/53-74/06/02-02: patch=93
+NO C0-41/6D-00/F9-F2/21-B3/0E/01-00: patch=94
+NO E3-E2/4C-00/21-A1/43-45/00/01-01: patch=95
+NO E3-E2/0C-00/11-80/52-73/08/01-01: patch=96
+NO 26-88/C0-00/55-F8/47-19/0B/00-00: patch=97
+NO 23-E4/D4-00/E5-35/03-65/07/00-00: patch=98
+NO 27-32/C0-00/32-A4/62-33/00/00-00: patch=99
+NO D0-31/4E-00/98-A2/32-47/00/01-02: patch=100
+NO F0-71/C0-00/93-43/03-02/0F/01-00: patch=101
+NO E0-F1/1A-80/13-33/52-13/00/01-02: patch=102
+NO E0-F1/1A-00/45-32/BA-91/00/00-02: patch=103
+NO 11-15/18-03/58-A2/02-72/0A/01-00: patch=104
+NO 10-18/80-40/F1-F1/53-53/00/00-00: patch=105
+NO 31-17/86-80/A1-7D/11-23/08/00-00: patch=106
+NO 10-18/80-40/F1-F6/53-54/00/00-00: patch=107
+NO 31-34/21-00/F5-93/56-E8/08/01-00: patch=108
+NO 03-15/4F-00/F1-D6/39-74/06/03-00: patch=109
+NO 31-22/43-00/6E-8B/17-0C/02/01-02: patch=110
+NO 31-22/1C-80/61-52/03-67/0E/00-00: patch=111
+NO 60-F0/0C-80/81-61/03-0C/08/00-01: patch=112
+NO 27-05/55-00/31-A7/62-75/00/00-00: patch=113
+NO 95-16/81-00/E7-96/01-67/04/00-00: patch=114
+NO 0C-01/87-80/F0-F2/05-05/04/01-01: patch=115
+NO 35-11/44-00/F8-F5/FF-75/0E/00-00: patch=116
+NO 10-10/0B-00/A7-D5/EC-F5/00/00-00: patch=117
+NO 20-01/0B-00/A8-D6/C8-B7/00/00-00: patch=118
+NO 00-01/0B-00/88-D5/C4-B7/00/00-00: patch=119
+NO 0C-10/8F-80/41-33/31-2B/08/00-03: patch=120
+NO 17-F7/00-00/3B-EA/DF-97/0B/03-00: patch=121
+NO 12-18/06-00/73-3C/02-74/0E/00-00: patch=122
+NO 02-08/00-00/3E-14/01-F3/0E/02-02: patch=123
+NO F5-F6/D4-00/EB-45/03-68/07/00-00: patch=124
+NO F0-CA/00-C0/DA-B0/71-17/08/01-01: patch=125
+NO F0-E2/00-C0/1E-11/11-11/08/01-01: patch=126
+NO E7-E8/00-04/34-10/00-B2/0E/02-02: patch=127
+NO 0C-04/00-00/F0-F6/F0-E6/0E/02-00: patch=128

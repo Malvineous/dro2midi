@@ -110,9 +110,9 @@ public:
   virtual void event(int what, int len = 0, unsigned char* data = 0);
 
   // these are event categories:
-    virtual void meta(int what, int len, unsigned char* data);
+    virtual void meta(int what, int len, const unsigned char* data);
     // these are special meta events:
-      virtual void text(int what, int len, char* whattext, unsigned char* txt);
+      virtual void text(int what, int len, const char* whattext, const unsigned char* txt);
       virtual void end();  // end of track command
       virtual void prefixchannel(unsigned char channel);
       virtual void prefixport(unsigned char port);
@@ -155,7 +155,7 @@ public:
     virtual void cont();
     virtual void stop();
     virtual void activesense();
-    virtual void sysex(int syslen, unsigned char* sysdata);
+    virtual void sysex(int syslen, const unsigned char* sysdata);
     // these are special sysex events:
       virtual void xgreset();
       virtual void gmreset();
@@ -231,10 +231,10 @@ public:
   void track();
   void endtrack();
 
-  void event(int what, int len, unsigned char* data);
+  void event(int what, int len, const unsigned char* data);
 
-  void text(int what, int len, unsigned char* txt);
-  void meta(int what, int len, unsigned char* data); // 0xff ....
+  void text(int what, int len, const unsigned char* txt);
+  void meta(int what, int len, const unsigned char* data); // 0xff ....
   virtual void prefixchannel(unsigned char channel);
   virtual void prefixport(unsigned char port);
   virtual void seqnumber(unsigned int seqno);
@@ -279,7 +279,7 @@ public:
   void cont();
   void stop();
   void activesense();
-  void sysex(int syslen, unsigned char* sysdata);
+  void sysex(int syslen, const unsigned char* sysdata);
   void xgreset();
   void gmreset();
   void gsreset();
@@ -292,7 +292,7 @@ public:
   void putlong(unsigned long val);
   void putdelta(unsigned long val);
   void puttime();
-  void put(int len, unsigned char* c);
+  void put(int len, const unsigned char* c);
   void seek(long pos);
 
   virtual void error(const char* msg);

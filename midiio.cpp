@@ -19,7 +19,7 @@ unsigned char sysex_gsreset[] = { 0xF0, 0x0A, 0x41, 0x10, 0x42, 0x12, 0x40, 0x00
 unsigned char sysex_gsexit[] =  { 0xF0, 0x0A, 0x41, 0x10, 0x42, 0x12, 0x40, 0x00, 0x7F, 0x7F, 0x42, 0xF7 };
 unsigned char sysex_xgreset[] = { 0xF0, 0x08, 0x43, 0x10, 0x4C, 0x00, 0x00, 0x7E, 0x00, 0xF7 };
 
-static int issysex(unsigned char* sysex, char* sysdata, int syslen)
+static int issysex(const unsigned char* sysex, const unsigned char* sysdata, int syslen)
 {
   if (*sysex == 0xF0)
     sysex++;
@@ -36,7 +36,7 @@ static int issysex(unsigned char* sysex, char* sysdata, int syslen)
   return (syslen != 0) ? 0 : 1;
 }
 
-static int sysexlen(unsigned char* sysex)
+static int sysexlen(unsigned const char* sysex)
 {
 int len = 0;
 
@@ -172,13 +172,13 @@ int midicode;
       unsigned char* sysdata = get(syslen);
       if ((options_ & OPTION_NOSYSEVENTS) == 0)
       {
-	if (issysex(sysex_gmreset, (char *)sysdata, syslen))
+	if (issysex(sysex_gmreset, sysdata, syslen))
 	  gmreset();
-	else if (issysex(sysex_gsreset, (char *)sysdata, syslen))
+	else if (issysex(sysex_gsreset, sysdata, syslen))
 	  gsreset();
-	else if (issysex(sysex_gsexit, (char *)sysdata, syslen))
+	else if (issysex(sysex_gsexit, sysdata, syslen))
 	  gsexit();
-	else if (issysex(sysex_xgreset, (char *)sysdata, syslen))
+	else if (issysex(sysex_xgreset, sysdata, syslen))
 	  xgreset();
 	else
 	  sysex(syslen, sysdata);
@@ -874,7 +874,7 @@ long MidiRead::units(unsigned long microsec, unsigned long msperbeat)
 }
 
 
-static char* GMProg[128] =
+static const char* GMProg[128] =
 {
   "Piano", "BritePiano", "HammerPiano", "HonkeyTonk", "NewTines", "DigiPiano", "Harpsicord", "Clav",
   "Celesta", "Glocken", "MusicBox", "Vibes", "Marimba", "Xylophon", "Tubular", "Santur",
@@ -981,11 +981,11 @@ void MidiRead::prefixport(unsigned char port)
 {
 }
 
-void MidiRead::text(int what, int len, char* whattext, unsigned char* txt)
+void MidiRead::text(int what, int len, const char* whattext, const unsigned char* txt)
 {
 }
 
-void MidiRead::meta(int what, int len, unsigned char* data)
+void MidiRead::meta(int what, int len, const unsigned char* data)
 {
 }
 
@@ -1159,7 +1159,7 @@ void MidiRead::activesense()
 {
 }
 
-void MidiRead::sysex(int syslen, unsigned char* sysdata)
+void MidiRead::sysex(int syslen, const unsigned char* sysdata)
 {
 }
 
@@ -1278,7 +1278,7 @@ void MidiWrite::endtrack()
   trackpos_ = 0;
 }
 
-void MidiWrite::event(int what, int len, unsigned char* data)
+void MidiWrite::event(int what, int len, const unsigned char* data)
 {
   puttime();
   putcode(what);
@@ -1295,14 +1295,14 @@ void MidiWrite::prefixport(unsigned char port)
   meta(0x21, 1, &port);
 }
 
-void MidiWrite::text(int what, int len, unsigned char* txt)
+void MidiWrite::text(int what, int len, const unsigned char* txt)
 {
   if (len < 0)
     len = strlen((char *)txt);
   meta(what, len, txt);
 }
 
-void MidiWrite::meta(int what, int len, unsigned char* data)
+void MidiWrite::meta(int what, int len, const unsigned char* data)
 {
   puttime();
   putcode(0xff);
@@ -1603,7 +1603,7 @@ void MidiWrite::activesense()
   putcode(0xfe);
 }
 
-void MidiWrite::sysex(int syslen, unsigned char* sysdata)
+void MidiWrite::sysex(int syslen, const unsigned char* sysdata)
 {
   puttime();
   putcode(0xf0);
@@ -1723,7 +1723,7 @@ void MidiWrite::flush()
   }
 }
 
-void MidiWrite::put(int len, unsigned char* c)
+void MidiWrite::put(int len, const unsigned char* c)
 {
   if (len <= 0)
     return;
@@ -1950,7 +1950,7 @@ void MidiCopy::reverb(int channel, int val)
   if (dest_ && mapchannel_[channel] >= 0)
     dest_->reverb(mapchannel_[channel], val);
 }
-                      
+
 void MidiCopy::chorus(int channel, int val)
 {
   if (dest_ && mapchannel_[channel] >= 0)
