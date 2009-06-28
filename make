@@ -17,5 +17,5 @@ else
 	TARGET="dro2midi"
 fi
 
-${PLATFORM}g++ -g -o ${TARGET} dro2midi.cpp midiio.cpp &&
+${PLATFORM}g++ -o ${TARGET} dro2midi.cpp midiio.cpp &&
 	${PLATFORM}strip ${TARGET}
