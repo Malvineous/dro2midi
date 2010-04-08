@@ -59,8 +59,19 @@
 //     - Included 128 standard GM instrument mappings extracted from Creative
 //       Labs' MIDI player (see gen_test_midi.cpp.)
 //
+//  v1.5 / 2010-03-28 / Wraithverge (liam82067 at yahoo dot com): Changes
+//     - Added code for several MIDI Controller Events for output MID-files,
+//       and they are the following:
+//       Reset Controllers [121] -- At the head of the Event list.
+//       Balance (or Pan)   [10] -- At the head of the Event list.
+//       Expression         [11] -- At the head of the Event list.
+//       All Notes Off     [123] -- At the foot of the Event list.
+//       Hopefully, other musicians will find these to be needed, as well.
+//     - Added detectors for the (at this time) two DRO formats, and a hint
+//       to let us know that the DRO v2.0 format is not supported.
+//
 
-#define VERSION           "1.4"
+#define VERSION           "1.5"
 #define MAPPING_FILE      "inst.txt"
 
 #define PATCH_NAME_FILE   "patch.txt"
@@ -229,6 +240,7 @@ void version()
   printf("DRO2MIDI v" VERSION " - Convert raw Adlib captures to General MIDI\n"
 		"Written by malvineous@shikadi.net in 2007\n"
 		"Heavily based upon IMF2MIDI written by Guenter Nagler in 1996\n"
+		"With contributions by Wraithverge (C) 2010.\n"
 		"http://www.shikadi.net/utils/\n"
 		"\n"
 	);
@@ -977,7 +989,17 @@ int main(int argc, char**argv)
 	iSpeed = 0;
 	if (strncmp((char *)cSig, "DBRAWOPL", 8) == 0) {
 		::iFormat = FORMAT_DRO;
-		printf("Input file is in DOSBox DRO format.\n");
+		fseek(f, 8, SEEK_SET);  // Seek to "version" fields.
+		unsigned long version = readUINT32LE(f);
+		if (version == 0x10000) {
+			printf("Input file is in DOSBox DRO v1.0 format.\n");
+		} else if (version == 0x2) {
+			printf("Input file is in DOSBox DRO v2.0 format, which is not supported.\n");
+			return 2;
+		} else {
+			printf("Input file is in DOSBox DRO format, but an unknown version!\n");
+			return 3;
+		}
 		::iInitialSpeed = 1000;
 
 		fseek(f, 16, SEEK_SET); // seek to "length in bytes" field
@@ -1034,7 +1056,9 @@ int main(int argc, char**argv)
     perror(output);
     return 1;
   }
-	if (iSpeed == 0) iSpeed = iInitialSpeed;
+	if (iSpeed == 0) {
+		iSpeed = iInitialSpeed;
+	}
 	resolution = iInitialSpeed / 2;
   write->head(/* version */ 0, /* track count updated later */0, resolution);
 
@@ -1042,8 +1066,15 @@ int main(int argc, char**argv)
   write->tempo((long)(60000000.0 / tempo));
   write->tact(4,4,24,8);
 
+  for (c = 0; c < 10; c++) {
+    mapchannel[c] = c;
+    write->resetctrlrs(mapchannel[c], 0);  // Reset All Controllers (Ensures default settings upon every playback).
+    write->volume(mapchannel[c], 127);
+    write->balance(mapchannel[c], 64);  // Usually called 'Pan'.
+    write->expression(mapchannel[c], 127);  // Similar to 'Volume', but this is primarily used for volume damping.
+  }
+
   for (c = 0; c <= 8; c++) {
-    write->volume(c, 127);
     lastprog[c] = -1;
 		reg[c].iOctave = 0;
   }
@@ -1236,6 +1267,11 @@ int main(int argc, char**argv)
       channel = GET_CHANNEL(code-0xe0);
       reg[channel].regE0[GET_OP(code-0xe0)] = param;
     }
+  }
+
+  for (c = 0; c < 10; c++) {
+       mapchannel[c] = c;
+       write->allnotesoff(mapchannel[c], 0);  // All Notes Off (Ensures that even incomplete Notes will be switched-off per each MIDI channel at the end-of-playback).
   }
 
   delete write;

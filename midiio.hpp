@@ -65,6 +65,8 @@ const unsigned long MTrk = 0x4D54726Bul;
 #define ctrl_datadec 97
 #define ctrl_lowrpn  100
 #define ctrl_highrpn 101
+#define ctrl_resetctrlrs 121
+#define ctrl_allnotesoff 123
 
 #define balance_left   0
 #define balance_center 64
@@ -141,6 +143,8 @@ public:
       virtual void datadec(int channel, int val);
       virtual void lowrpn(int channel, int val);
       virtual void highrpn(int channel, int val);
+      virtual void resetctrlrs(int channel, int val);
+      virtual void allnotesoff(int channel, int val);
       virtual void pitchbendrange(int channel, int val);
     virtual void noteon(int channel, int note, int vel);
     virtual void noteoff(int channel, int note, int vel);
@@ -263,6 +267,8 @@ public:
     void datadec(int channel, int val);
     void lowrpn(int channel, int val);
     void highrpn(int channel, int val);
+    void resetctrlrs(int channel, int val);
+    void allnotesoff(int channel, int val);
     void pitchbendrange(int channel, int halfnotes);
 
   void noteon(int channel, int note, int vel);
@@ -365,6 +371,10 @@ public:
     virtual void chorus(int channel, int val);
     virtual void datainc(int channel, int val);
     virtual void datadec(int channel, int val);
+    virtual void lowrpn(int channel, int val);
+    virtual void highrpn(int channel, int val);
+    virtual void resetctrlrs(int channel, int val);
+    virtual void allnotesoff(int channel, int val);
     virtual void noteon(int channel, int note, int vel);
     virtual void noteoff(int channel, int note, int vel);
   virtual void pitchbend(int channel, int val);

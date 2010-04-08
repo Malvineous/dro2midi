@@ -433,6 +433,8 @@ int midicode;
 	    case ctrl_datadec: datadec(channel, p[1]); break;
 	    case ctrl_lowrpn: lowrpn(channel, p[1]); break;
 	    case ctrl_highrpn:
+	    case ctrl_resetctrlrs: resetctrlrs(channel, p[1]); break;
+	    case ctrl_allnotesoff: allnotesoff(channel, p[1]); break;
 	      {
 	      unsigned char *c = need(8);
 
@@ -1094,6 +1096,16 @@ void MidiRead::highrpn(int channel, int val)
   control(channel, ctrl_highrpn, val);
 }
 
+void MidiRead::resetctrlrs(int channel, int val)
+{
+  control(channel, ctrl_resetctrlrs, val);
+}
+
+void MidiRead::allnotesoff(int channel, int val)
+{
+  control(channel, ctrl_allnotesoff, val);
+}
+
 void MidiRead::pitchbendrange(int channel, int halfnotes)
 {
   highrpn(channel, 0);
@@ -1489,6 +1501,16 @@ void MidiWrite::lowrpn(int channel, int val)
 void MidiWrite::highrpn(int channel, int val)
 {
   control(channel, ctrl_highrpn, val);
+}
+
+void MidiWrite::resetctrlrs(int channel, int val)
+{
+  control(channel, ctrl_resetctrlrs, val);
+}
+
+void MidiWrite::allnotesoff(int channel, int val)
+{
+  control(channel, ctrl_allnotesoff, val);
 }
 
 void MidiWrite::noteon(int channel, int note, int vel)
@@ -1967,6 +1989,30 @@ void MidiCopy::datadec(int channel, int val)
 {
   if (dest_ && mapchannel_[channel] >= 0)
     dest_->datadec(mapchannel_[channel], val);
+}
+
+void MidiCopy::lowrpn(int channel, int val)
+{
+  if (dest_ && mapchannel_[channel] >= 0)
+    dest_->lowrpn(mapchannel_[channel], val);
+}
+
+void MidiCopy::highrpn(int channel, int val)
+{
+  if (dest_ && mapchannel_[channel] >= 0)
+    dest_->highrpn(mapchannel_[channel], val);
+}
+
+void MidiCopy::resetctrlrs(int channel, int val)
+{
+  if (dest_ && mapchannel_[channel] >= 0)
+    dest_->resetctrlrs(mapchannel_[channel], val);
+}
+
+void MidiCopy::allnotesoff(int channel, int val)
+{
+  if (dest_ && mapchannel_[channel] >= 0)
+    dest_->allnotesoff(mapchannel_[channel], val);
 }
 
 
