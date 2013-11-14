@@ -1,5 +1,5 @@
 ---------------------------------------------------------------
- DRO2MIDI - version 1.4 (2009-03-29)
+ DRO2MIDI - version 1.6 (2013-11-14)
  Written by malvineous@shikadi.net
  Heavily based upon IMF2MIDI written by Guenter Nagler in 1996
  http://www.shikadi.net/utils/
@@ -113,6 +113,11 @@ these volume levels set to zero, which results in very quiet MIDI files (there
 is an internal limit as to how quiet a note can sound to prevent it being lost 
 entirely.)  If your output MIDI file is much too quiet, this option will cause 
 all notes to be played at maximum velocity.
+
+-s instructs dro2midi to write all detected instruments to a .sbi file. This
+is a 52 byte binary instrument format for OPL chips created by Creative Labs.
+It is supported by applications written to work with the OPL, such as Ad Lib
+Tracker 2.
 
 // inst.txt
 /////////////
