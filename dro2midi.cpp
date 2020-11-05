@@ -96,6 +96,7 @@ const double pitchbend_center = 8192.0;
 #include <assert.h>
 #include <math.h>
 #include <stdio.h>
+#include <stdint.h>
 
 #define WRITE_BINARY  "wb"
 #define READ_TEXT     "r"
@@ -226,6 +227,8 @@ int iFormat = 0; // input format
 #define FORMAT_IMF  1
 #define FORMAT_DRO  2
 #define FORMAT_RAW  3
+#define FORMAT_DRO2 4
+
 int iSpeed = 0; // clock speed (in Hz)
 int iInitialSpeed = 0; // first iSpeed value written to MIDI header
 
@@ -1029,37 +1032,62 @@ int main(int argc, char**argv)
     perror(input);
     return 1;
   }
-  unsigned long imflen = 0;
+	unsigned long imflen = 0;
+	struct dro2hdr {
+		uint32_t iLengthPairs;
+		uint32_t iLengthMS;
+		uint8_t iHardwareType;
+		uint8_t iFormat;
+		uint8_t iCompression;
+		uint8_t iShortDelayCode;
+		uint8_t iLongDelayCode;
+		uint8_t iCodemapLength;
+		uint8_t iCodemap[256];
+	} dro2hdr;
 
 	unsigned char cSig[9];
 	fseek(f, 0, SEEK_SET);
-  //fgets(cSig, 9, f);
-  fread(cSig, 1, 9, f);
+	fread(cSig, 1, 8, f);
+	cSig[8] = 0;
 	iSpeed = 0;
-	if (strncmp((char *)cSig, "DBRAWOPL", 8) == 0) {
+
+	if (strcmp((char *)cSig, "DBRAWOPL") == 0) {
 		::iFormat = FORMAT_DRO;
-		fseek(f, 8, SEEK_SET);  // Seek to "version" fields.
 		unsigned long version = readUINT32LE(f);
 		if (version == 0x10000) {
 			printf("Input file is in DOSBox DRO v1.0 format.\n");
 		} else if (version == 0x2) {
-			printf("Input file is in DOSBox DRO v2.0 format, which is not supported.\n");
-			return 2;
+			printf("Input file is in DOSBox DRO v2.0 format.\n");
+			::iFormat = FORMAT_DRO2;
 		} else {
 			printf("Input file is in DOSBox DRO format, but an unknown version!\n");
 			return 3;
 		}
 		::iInitialSpeed = 1000;
+		// filepos at this point is 12, pointing at main DRO header.
 
-		fseek(f, 16, SEEK_SET); // seek to "length in bytes" field
-	  imflen = readUINT32LE(f);
-	} else if (strncmp((char *)cSig, "RAWADATA", 8) == 0) {
+		if(::iFormat == FORMAT_DRO) {
+			fseek(f, 16, SEEK_SET); // seek to "length in bytes" field
+			imflen = readUINT32LE(f);
+		} else {
+			dro2hdr.iLengthPairs = readUINT32LE(f);
+			dro2hdr.iLengthMS = readUINT32LE(f);
+			fread(&dro2hdr.iHardwareType, 1, 6, f);
+			if(dro2hdr.iCompression) {
+				printf("unsupported DRO2 compression type.\n");
+				return 2;
+			}
+			fread(dro2hdr.iCodemap, 1, dro2hdr.iCodemapLength, f);
+			imflen = dro2hdr.iLengthPairs * 2;
+		}
+
+	} else if (strcmp((char *)cSig, "RAWADATA") == 0) {
 		::iFormat = FORMAT_RAW;
 		printf("Input file is in Rdos RAW format.\n");
 
 		// Read until EOF (0xFFFF is really the end but we'll check that during conversion)
 		fseek(f, 0, SEEK_END);
-	  imflen = ftell(f);
+		imflen = ftell(f);
 
 		fseek(f, 8, SEEK_SET); // seek to "initial clock speed" field
 		::iInitialSpeed = 1000;
@@ -1074,11 +1102,11 @@ int main(int argc, char**argv)
 		if ((cSig[0] == 0) && (cSig[1] == 0)) {
 			printf("Input file appears to be in IMF type-0 format.\n");
 			fseek(f, 0, SEEK_END);
-		  imflen = ftell(f);
+			imflen = ftell(f);
 			fseek(f, 0, SEEK_SET);
 		} else {
 			printf("Input file appears to be in IMF type-1 format.\n");
-		  imflen = cSig[0] + (cSig[1] << 8);
+			imflen = cSig[0] + (cSig[1] << 8);
 			fseek(f, 2, SEEK_SET); // seek to start of actual OPL data
 		}
 		if (strcasecmp(&input[strlen(input)-3], "imf") == 0) {
@@ -1167,56 +1195,76 @@ int main(int argc, char**argv)
 	int iMinLen; // Minimum length for valid notes to still be present
 	switch (::iFormat) {
 		case FORMAT_IMF: iMinLen = 4; break;
+		case FORMAT_DRO2:
 		case FORMAT_DRO: iMinLen = 2; break;
 		case FORMAT_RAW: iMinLen = 2; break;
 	}
 
 	unsigned long iSize = imflen; // sometimes the counter wraps around, need this to stop it from happening
-  while ((imflen >= (unsigned long)iMinLen) && (imflen <= iSize)) {
+	while ((imflen >= (unsigned long)iMinLen) && (imflen <= iSize)) {
 
-  	// Get the next OPL register and value from the input file
+		// Get the next OPL register and value from the input file
 
 		switch (::iFormat) {
-			case FORMAT_IMF:
+		case FORMAT_IMF:
 				// Write the last iteration's delay (since the delay needs to come *after* the note)
-		    write->time(delay);
+			write->time(delay);
 
-		    code = readByte(f);
-		    param = readByte(f);
-				delay = readUINT16LE(f);
-		    imflen -= 4;
-				break;
-			case FORMAT_DRO:
-		    code = readByte(f);
-				imflen--;
-				switch (code) {
-					case 0x00: // delay (byte)
-						delay += 1 + readByte(f);
-						imflen--;
-						continue;
-					case 0x01: // delay (int)
-						delay += 1 + readUINT16LE(f);
-						imflen -= 2;
-						continue;
-					case 0x02: // use first OPL chip
-					case 0x03: // use second OPL chip
-						fprintf(stderr, "Warning: This song uses multiple OPL chips - this isn't yet supported!\n");
-						continue;
-					case 0x04: // escape
-						code = readByte(f);
-						imflen--;
-						break;
-				}
-		    param = readByte(f);
-				imflen--;
+			code = readByte(f);
+			param = readByte(f);
+			delay = readUINT16LE(f);
+			imflen -= 4;
+			break;
 
+		case FORMAT_DRO2:
+			code = readByte(f);
+			param = readByte(f);
+			imflen-= 2;
+			if(code == dro2hdr.iShortDelayCode) {
+				delay = param + 1;
+			} else if (code == dro2hdr.iLongDelayCode) {
+				delay = (param + 1) << 8;
+			}
+			if(delay) {
 				// Write any delay (as this needs to come *before* the next note)
-		    write->time(delay);
+				write->time(delay);
 				delay = 0;
-				break;
-			case FORMAT_RAW:
-		    param = readByte(f);
-		    code = readByte(f);
+				continue;
+			}
+			code = dro2hdr.iCodemap[code];
+			break;
+
+		case FORMAT_DRO:
+			code = readByte(f);
+			imflen--;
+			switch (code) {
+				case 0x00: // delay (byte)
+					delay += 1 + readByte(f);
+					imflen--;
+					continue;
+				case 0x01: // delay (int)
+					delay += 1 + readUINT16LE(f);
+					imflen -= 2;
+					continue;
+				case 0x02: // use first OPL chip
+				case 0x03: // use second OPL chip
+					fprintf(stderr, "Warning: This song uses multiple OPL chips - this isn't yet supported!\n");
+					continue;
+				case 0x04: // escape
+					code = readByte(f);
+					imflen--;
+					break;
+			}
+			param = readByte(f);
+			imflen--;
+
+			// Write any delay (as this needs to come *before* the next note)
+			write->time(delay);
+			delay = 0;
+			break;
+		case FORMAT_RAW:
+				param = readByte(f);
+				code = readByte(f);
 				imflen -= 2;
 				switch (code) {
 					case 0x00: // delay
@@ -1227,7 +1275,7 @@ int main(int argc, char**argv)
 							case 0x00: {
 								if (delay != 0) {
 									// See below - we need to write out any delay at the old clock speed before we change it
-							    write->time((delay * iInitialSpeed / ::iSpeed));
+									write->time((delay * iInitialSpeed / ::iSpeed));
 									delay = 0;
 								}
 								int iClockSpeed = readUINT16LE(f);
@@ -1260,33 +1308,34 @@ int main(int argc, char**argv)
 				// delay accordingly as the delay units are in the current clock speed.
 				// This calculation converts them into 1000Hz delay units regardless of
 				// the current clock speed.
-		    if (delay != 0) write->time((delay * iInitialSpeed / ::iSpeed));
+				if (delay != 0) write->time((delay * iInitialSpeed / ::iSpeed));
 				//printf("delay is %d (ticks %d)\n", (delay * iInitialSpeed / ::iSpeed), delay);
 				delay = 0;
 				break;
 
-			default: // should never happen
-				break;
+		default: // should never happen
+			break;
 
 		} // switch (::iFormat)
 
 		// Convert the OPL register and value into a MIDI event
 
-    if (code >= 0xa0 && code <= 0xa8) { // set freq bits 0-7
-      channel = code-0xa0;
-      curfreq[channel] = (curfreq[channel] & 0xF00) + (param & 0xff);
+		if (code >= 0xa0 && code <= 0xa8) { // set freq bits 0-7
+			channel = code-0xa0;
+			curfreq[channel] = (curfreq[channel] & 0xF00) + (param & 0xff);
 			if (keyAlreadyOn[channel]) {
 				param = 0x20; // bare noteon for code below
 				doNoteOnOff(true, channel, channel);
 			}
-      continue;
-    } else if (code >= 0xB0 && code <= 0xB8) { // set freq bits 8-9 and octave and on/off
-      channel = code - 0xb0;
-      curfreq[channel] = (curfreq[channel] & 0x0FF) + ((param & 0x03)<<8);
-      // save octave so we know what it is if we run 0xA0-0xA8 regs change code
-      // next (which doesn't have the octave)
+			continue;
+		} else if (code >= 0xB0 && code <= 0xB8) { // set freq bits 8-9 and octave and on/off
+			channel = code - 0xb0;
+			curfreq[channel] = (curfreq[channel] & 0x0FF) + ((param & 0x03)<<8);
+			// save octave so we know what it is if we run 0xA0-0xA8 regs change code
+			// next (which doesn't have the octave)
 			reg[channel].iOctave = (param >> 2) & 7;
-      int keyon = (param >> 5) & 1;
+
+			int keyon = (param >> 5) & 1;
 			doNoteOnOff(keyon, channel, channel);
 		} else if ((code == 0xBD) && (::bRhythm)) {
 			if ((param >> 5) & 1) {
@@ -1298,25 +1347,25 @@ int main(int argc, char**argv)
 				doNoteOnOff( param       & 1, channel, CHAN_HIHAT);
 			}
 		} else if (code >= 0x20 && code <= 0x35) {
-      channel = GET_CHANNEL(code-0x20);
-      reg[channel].reg20[GET_OP(code-0x20)] = param;
-    } else if (code >= 0x40 && code <= 0x55) {
-      channel = GET_CHANNEL(code-0x40);
-      reg[channel].reg40[GET_OP(code-0x40)] = param;
-    } else if (code >= 0x60 && code <= 0x75) {
-      channel = GET_CHANNEL(code-0x60);
-      reg[channel].reg60[GET_OP(code-0x60)] = param;
-    } else if (code >= 0x80 && code <= 0x95) {
-      channel = GET_CHANNEL(code-0x80);
-      reg[channel].reg80[GET_OP(code-0x80)] = param;
-    } else if (code >= 0xc0 && code <= 0xc8) {
-      channel = code-0xc0;
-      reg[channel].regC0 = param;
-    } else if (code >= 0xe0 && code <= 0xF5) {
-      channel = GET_CHANNEL(code-0xe0);
-      reg[channel].regE0[GET_OP(code-0xe0)] = param;
-    }
-  }
+			channel = GET_CHANNEL(code-0x20);
+			reg[channel].reg20[GET_OP(code-0x20)] = param;
+		} else if (code >= 0x40 && code <= 0x55) {
+			channel = GET_CHANNEL(code-0x40);
+			reg[channel].reg40[GET_OP(code-0x40)] = param;
+		} else if (code >= 0x60 && code <= 0x75) {
+			channel = GET_CHANNEL(code-0x60);
+			reg[channel].reg60[GET_OP(code-0x60)] = param;
+		} else if (code >= 0x80 && code <= 0x95) {
+			channel = GET_CHANNEL(code-0x80);
+			reg[channel].reg80[GET_OP(code-0x80)] = param;
+		} else if (code >= 0xc0 && code <= 0xc8) {
+			channel = code-0xc0;
+			reg[channel].regC0 = param;
+		} else if (code >= 0xe0 && code <= 0xF5) {
+			channel = GET_CHANNEL(code-0xe0);
+			reg[channel].regE0[GET_OP(code-0xe0)] = param;
+		}
+	} // while(readinput...)
 
   for (c = 0; c < 10; c++) {
        mapchannel[c] = c;
