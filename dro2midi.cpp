@@ -956,6 +956,15 @@ void doNoteOnOff(bool bKeyOn, int chanOPL, int chanMIDI)
 	return;
 }
 
+static const char* dro2hwtypestr(unsigned hwtype) {
+	switch(hwtype) {
+	case 0: return "OPL2";
+	case 1: return "OPL2 dual";
+	case 2: return "OPL3";
+	default: return "UNKNOWN";
+	}
+}
+
 int main(int argc, char**argv)
 {
 	int c;
@@ -1073,12 +1082,25 @@ int main(int argc, char**argv)
 			dro2hdr.iLengthPairs = readUINT32LE(f);
 			dro2hdr.iLengthMS = readUINT32LE(f);
 			fread(&dro2hdr.iHardwareType, 1, 6, f);
-			if(dro2hdr.iCompression) {
-				printf("unsupported DRO2 compression type.\n");
+			if(dro2hdr.iCodemapLength >= 128) {
+				fprintf(stderr, "invalid setting %u for iCodemapLength!\n", (unsigned) dro2hdr.iCodemapLength);
 				return 2;
 			}
 			fread(dro2hdr.iCodemap, 1, dro2hdr.iCodemapLength, f);
 			imflen = dro2hdr.iLengthPairs * 2;
+			printf(">>> === DROv2 header info === <<<\n");
+			printf(">>> iLengthPairs\t%u\n", (unsigned) dro2hdr.iLengthPairs);
+			printf(">>> iLengthMS\t\t%u\n", (unsigned) dro2hdr.iLengthMS);
+			printf(">>> iHardwareType\t%u (%s)\n", (unsigned) dro2hdr.iHardwareType, dro2hwtypestr(dro2hdr.iHardwareType));
+			printf(">>> iFormat\t\t%u\n", (unsigned) dro2hdr.iFormat);
+			printf(">>> iCompression\t%u\n", (unsigned) dro2hdr.iCompression);
+			printf(">>> iShortDelayCode\t%u\n", (unsigned) dro2hdr.iShortDelayCode);
+			printf(">>> iLongDelayCode\t%u\n", (unsigned) dro2hdr.iLongDelayCode);
+			printf(">>> iCodemapLength\t%u\n", (unsigned) dro2hdr.iCodemapLength);
+			if(dro2hdr.iCompression) {
+				printf("unsupported DRO2 compression type.\n");
+				return 2;
+			}
 		}
 
 	} else if (strcmp((char *)cSig, "RAWADATA") == 0) {
