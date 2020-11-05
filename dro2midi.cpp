@@ -412,7 +412,7 @@ bool loadInstruments(void)
 				// Normal instrument or rhythm Bass Drum, read both
 				// operators + connection byte
 				iNumFields = sscanf(&line[3], "%02X-%02X/%02X-%02X/%02X-%02X/%02X-%02X"
-					"/%02X/%02X-%02X: %255c\n",
+					"/%02X/%02X-%02X: %s\n",
 					&in.reg20[0], &in.reg20[1],
 					&in.reg40[0], &in.reg40[1],
 					&in.reg60[0], &in.reg60[1],
@@ -420,7 +420,7 @@ bool loadInstruments(void)
 					&in.regC0,
 					&in.regE0[0], &in.regE0[1], value);
 				if (iNumFields != 12) {
-					EPRINTF("Unable to parse line %d: (expected 12 instrument "
+					EPRINTF("Unable to parse line %d: (expected 12 "
 						"fields, got %d)\n\n%s\n", iLineNum, iNumFields, line);
 					return false;
 				}
@@ -430,7 +430,7 @@ bool loadInstruments(void)
 			case HiHat:
 				// This instrument is one operator only, but it does use the connection
 				// byte (probably)
-				iNumFields = sscanf(&line[3], "%02X/%02X/%02X/%02X/%02X/%02X: %255c\n",
+				iNumFields = sscanf(&line[3], "%02X/%02X/%02X/%02X/%02X/%02X: %s\n",
 					&in.reg20[0],
 					&in.reg40[0],
 					&in.reg60[0],
@@ -438,7 +438,7 @@ bool loadInstruments(void)
 					&in.regC0,
 					&in.regE0[0], value);
 				if (iNumFields != 7) {
-					EPRINTF("Unable to parse line %d: (expected 7 instrument "
+					EPRINTF("Unable to parse line %d: (expected 7 "
 						"fields, got %d)\n\n%s\n", iLineNum, iNumFields, line);
 					return false;
 				}
@@ -448,14 +448,14 @@ bool loadInstruments(void)
 			case TopCymbal:
 				// This instrument does not uses the connection byte, so read in one byte
 				// less.  Also read the values into the other operator.
-				iNumFields = sscanf(&line[3], "%02X/%02X/%02X/%02X/%02X: %255c\n",
+				iNumFields = sscanf(&line[3], "%02X/%02X/%02X/%02X/%02X: %s\n",
 					&in.reg20[1],
 					&in.reg40[1],
 					&in.reg60[1],
 					&in.reg80[1],
 					&in.regE0[1], value);
 				if (iNumFields != 6) {
-					EPRINTF("Unable to parse line %d: (expected 6 instrument "
+					EPRINTF("Unable to parse line %d: (expected 6 "
 						"fields, got %d)\n\n%s\n", iLineNum, iNumFields, line);
 					return false;
 				}
