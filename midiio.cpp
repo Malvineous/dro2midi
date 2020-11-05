@@ -7,7 +7,7 @@
 #include <string.h>
 #include <stdlib.h>
 
-static char* copyright = "midiio v1.4 (c) 1995 by Günter Nagler";
+static const char* copyright = "midiio v1.4 (c) 1995 by Günter Nagler";
 
 int compress = 1;
 
