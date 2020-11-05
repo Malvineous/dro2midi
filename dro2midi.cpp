@@ -318,15 +318,19 @@ inline unsigned long readUINT32LE(FILE *f)
 	return c[0] | (c[1] << 8L) | (c[2] << 16L) | (c[3] << 24L);
 }
 
+
+#define EPRINTF(FMT, ...) fprintf(stderr, "%s: " FMT, fname, __VA_ARGS__)
 bool loadInstruments(void)
 {
 	for (int i = 0; i < NUM_MIDI_PATCHES; i++) sprintf(cPatchName[i], "Patch #%d", i+1);
 	for (int i = 0; i < NUM_MIDI_PERC; i++) sprintf(cPercName[i], "Note #%d", i);
 
 	char line[256];
+	const char *fname;
 
+	fname = PATCH_NAME_FILE;
 	FILE* p = fopen(PATCH_NAME_FILE, "r");
-  if (!p) {
+	if (!p) {
 		fprintf(stderr, "Warning: Unable to open file listing patch names ("
 			PATCH_NAME_FILE ")\nInstrument names will not be available.\n");
 	} else {
@@ -338,14 +342,15 @@ bool loadInstruments(void)
 				assert(iValue <= NUM_MIDI_PATCHES);
 				snprintf(cPatchName[iValue-1], INSTR_NAMELEN, "%s [%d]", &line[iLen], iValue);
 			} else if ((line[0] != '#') && (line[0] != '\n')) {
-				fprintf(stderr, "Invalid line in " PATCH_NAME_FILE ": %s\n", line);
+				EPRINTF("Invalid line: %s\n", line);
 			}
 		}
 		fclose(p);
 	}
 
+	fname = PERC_NAME_FILE;
 	p = fopen(PERC_NAME_FILE, "r");
-  if (!p) {
+	if (!p) {
 		fprintf(stderr, "Warning: Unable to open file listing percussion note "
 			"names (" PERC_NAME_FILE ")\nPercussion names will not be available.\n");
 	} else {
@@ -357,14 +362,15 @@ bool loadInstruments(void)
 				assert(iValue <= NUM_MIDI_PERC);
 				snprintf(cPercName[iValue], INSTR_NAMELEN, "%s [%d]", &line[iLen], iValue);
 			} else if ((line[0] != '#') && (line[0] != '\n')) {
-				fprintf(stderr, "Invalid line in " PERC_NAME_FILE ": %s\n", line);
+				EPRINTF("Invalid line: %s\n", line);
 			}
 		}
 		fclose(p);
 	}
 
+	fname = MAPPING_FILE;
 	FILE* f = fopen(MAPPING_FILE, "r");
-  if (!f) {
+	if (!f) {
 		fprintf(stderr, "Warning: Unable to open instrument mapping file "
 			MAPPING_FILE ", defaulting to a Grand Piano\nfor all instruments.\n");
 		return true;
@@ -395,7 +401,7 @@ bool loadInstruments(void)
 		else if ((cInstType[0] == 'T') && (cInstType[1] == 'C')) in.eRhythmInstrument = TopCymbal;
 		else if ((cInstType[0] == 'H') && (cInstType[1] == 'H')) in.eRhythmInstrument = HiHat;
 		else {
-			fprintf(stderr, "Invalid instrument type \"%s\" on line %d:\n\n  %s\n",
+			EPRINTF("Invalid instrument type \"%s\" on line %d:\n\n  %s\n",
 				cInstType, iLineNum, line);
 			return false;
 		}
@@ -414,7 +420,7 @@ bool loadInstruments(void)
 					&in.regC0,
 					&in.regE0[0], &in.regE0[1], value);
 				if (iNumFields != 12) {
-					fprintf(stderr, "Unable to parse line %d: (expected 12 instrument "
+					EPRINTF("Unable to parse line %d: (expected 12 instrument "
 						"fields, got %d)\n\n%s\n", iLineNum, iNumFields, line);
 					return false;
 				}
@@ -432,7 +438,7 @@ bool loadInstruments(void)
 					&in.regC0,
 					&in.regE0[0], value);
 				if (iNumFields != 7) {
-					fprintf(stderr, "Unable to parse line %d: (expected 7 instrument "
+					EPRINTF("Unable to parse line %d: (expected 7 instrument "
 						"fields, got %d)\n\n%s\n", iLineNum, iNumFields, line);
 					return false;
 				}
@@ -449,7 +455,7 @@ bool loadInstruments(void)
 					&in.reg80[1],
 					&in.regE0[1], value);
 				if (iNumFields != 6) {
-					fprintf(stderr, "Unable to parse line %d: (expected 6 instrument "
+					EPRINTF("Unable to parse line %d: (expected 6 instrument "
 						"fields, got %d)\n\n%s\n", iLineNum, iNumFields, line);
 					return false;
 				}
@@ -485,7 +491,7 @@ bool loadInstruments(void)
 				in.isdrum = 0;
 				in.prog = iValue - 1;
 				if ((in.prog < 0) || (in.prog > 127)) {
-					fprintf(stderr, "ERROR: Instrument #%d (line %d) was set to "
+					EPRINTF("ERROR: Instrument #%d (line %d) was set to "
 						"patch=%d, but this value must be between 1 and 128 inclusive.\n",
 						instrcnt, iLineNum, in.prog + 1);
 					return false;
@@ -496,7 +502,7 @@ bool loadInstruments(void)
 				in.prog = -1;
 				in.note = iValue;
 				if ((in.note < 0) || (in.note > 127)) {
-					fprintf(stderr, "ERROR: Drum instrument #%d (line %d) was set to "
+					EPRINTF("ERROR: Drum instrument #%d (line %d) was set to "
 						"drum=%d, but this value must be between 1 and 128 inclusive.\n",
 						instrcnt, iLineNum, in.note);
 					return false;
@@ -508,7 +514,7 @@ bool loadInstruments(void)
 				// Mute this instrument
 				in.muted = true;
 			} else {
-				fprintf(stderr, "Unknown instrument option on line %d: %s\n",
+				EPRINTF("Unknown instrument option on line %d: %s\n",
 					iLineNum, nextopt);
 				return false;
 			}
@@ -543,6 +549,7 @@ bool loadInstruments(void)
   fclose(f);
   return true;
 }
+#undef EPRINTF
 
 long difference(int a, int b, int importance = 1)
 {
