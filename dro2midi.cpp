@@ -1051,7 +1051,7 @@ int main(int argc, char**argv)
 		uint8_t iShortDelayCode;
 		uint8_t iLongDelayCode;
 		uint8_t iCodemapLength;
-		uint8_t iCodemap[256];
+		uint8_t iCodemap[128];
 	} dro2hdr;
 
 	unsigned char cSig[9];
@@ -1224,7 +1224,7 @@ int main(int argc, char**argv)
 
 		switch (::iFormat) {
 		case FORMAT_IMF:
-				// Write the last iteration's delay (since the delay needs to come *after* the note)
+			// Write the last iteration's delay (since the delay needs to come *after* the note)
 			write->time(delay);
 
 			code = readByte(f);
@@ -1236,7 +1236,7 @@ int main(int argc, char**argv)
 		case FORMAT_DRO2:
 			code = readByte(f);
 			param = readByte(f);
-			imflen-= 2;
+			imflen -= 2;
 			if(code == dro2hdr.iShortDelayCode) {
 				delay = param + 1;
 			} else if (code == dro2hdr.iLongDelayCode) {
@@ -1248,7 +1248,11 @@ int main(int argc, char**argv)
 				delay = 0;
 				continue;
 			}
-			code = dro2hdr.iCodemap[code];
+			if((code & 0x7f) >= dro2hdr.iCodemapLength) {
+				fprintf(stderr, "error: corrupt data encountered!\n");
+				return 2;
+			}
+			code = (code & 0x80) | dro2hdr.iCodemap[code & 0x7f];
 			break;
 
 		case FORMAT_DRO:
