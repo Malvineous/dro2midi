@@ -1192,13 +1192,8 @@ int main(int argc, char**argv)
 		mute[c] = false;
   }
 
-	int iMinLen; // Minimum length for valid notes to still be present
-	switch (::iFormat) {
-		case FORMAT_IMF: iMinLen = 4; break;
-		case FORMAT_DRO2:
-		case FORMAT_DRO: iMinLen = 2; break;
-		case FORMAT_RAW: iMinLen = 2; break;
-	}
+	int iMinLen = 2; // Minimum length for valid notes to still be present
+	if(::iFormat == FORMAT_IMF) iMinLen = 4;
 
 	unsigned long iSize = imflen; // sometimes the counter wraps around, need this to stop it from happening
 	while ((imflen >= (unsigned long)iMinLen) && (imflen <= iSize)) {
