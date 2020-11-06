@@ -1,14 +1,17 @@
 OBJS = dro2midi.o midiio.o
-PROG = dro2midi
+PROGS = dro2midi droshrink
 
 -include config.mak
 
-$(PROG): $(OBJS)
+all: $(PROGS)
+
+dro2midi: $(OBJS)
 	$(CXX) -o $@ $^ $(LDFLAGS)
 
-all: $(PROG)
+droshrink: droshrink.c
+	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ $^ $(LDFLAGS)
 
 clean:
-	rm -f $(PROG) $(OBJS)
+	rm -f $(PROGS) $(OBJS)
 
 .PHONY: all clean
