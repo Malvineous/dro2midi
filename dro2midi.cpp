@@ -74,8 +74,15 @@
 //	   - Added -s switch to save detected instruments in Creative Sound
 //       Blaster Instrument format (.sbi)
 //
+//  v1.7 / 2021-07-14 / Snooping One (https://github.com/Snoopin1)
+//     - Improved instrument detection and SBI export. Already-detected
+//       instruments no longer get detected as new instruments when their
+//       volume changes within a song. Exported SBIs no longer have numbered
+//       internal names, so that duplicate SBIs can be identified with a
+//       checksum calculator.
+//
 
-#define VERSION           "1.6"
+#define VERSION           "1.7"
 #define MAPPING_FILE      "inst.txt"
 
 #define PATCH_NAME_FILE   "patch.txt"
@@ -578,7 +585,6 @@ long compareinstr(INSTRUMENT& a, INSTRUMENT& b, RHYTHM_INSTRUMENT ri)
 				difference(a.reg20[0], b.reg20[0], 2) +
 				difference(a.reg20[1], b.reg20[1], 2) +
 				difference(a.reg40[0], b.reg40[0], 1) +
-				difference(a.reg40[1], b.reg40[1], 1) +
 				difference(a.reg60[0], b.reg60[0], 2) +
 				difference(a.reg60[1], b.reg60[1], 2) +
 				difference(a.reg80[0], b.reg80[0], 2) +
@@ -609,7 +615,6 @@ long compareinstr(INSTRUMENT& a, INSTRUMENT& b, RHYTHM_INSTRUMENT ri)
 			return
 				difference(a.eRhythmInstrument, ri, 4) +
 				difference(a.reg20[1], b.reg20[1], 2) +
-				difference(a.reg40[1], b.reg40[1], 1) +
 				difference(a.reg60[1], b.reg60[1], 2) +
 				difference(a.reg80[1], b.reg80[1], 2) +
 				difference(a.regE0[1], b.regE0[1], 1);
@@ -626,7 +631,7 @@ void writesbi(const char* filename, int instrno, int chanOPL) {
 	} else {
 		fwrite("SBI\x1a", sizeof(char), 4, f_sbi);
 		memset(title, 0, 32);
-		snprintf(title, 32, "dro2midi_%03d", instrno);
+		snprintf(title, 32, "dro2midi");
 		fwrite(title, sizeof(char), 32, f_sbi);
 		unsigned char instr[16];
 		memset(instr, 0, 16);
